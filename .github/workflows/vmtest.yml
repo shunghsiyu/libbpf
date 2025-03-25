@@ -42,17 +42,11 @@ jobs:
           arch: ${{ inputs.arch }}
           llvm-version: ${{ inputs.llvm-version }}
 
-      - name: Get checkpoint commit
-        shell: bash
-        run: |
-          cat CHECKPOINT-COMMIT
-          echo "CHECKPOINT=$(cat CHECKPOINT-COMMIT)" >> $GITHUB_ENV
-
       - name: Get kernel source at checkpoint
         uses: libbpf/ci/get-linux-source@v3
         with:
-          repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git'
-          rev: ${{ env.CHECKPOINT }}
+          repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git'
+          rev: 'linux-6.12.y'
           dest: '${{ github.workspace }}/.kernel'
 
       - name: Patch kernel source
