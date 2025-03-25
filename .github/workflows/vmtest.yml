@@ -43,7 +43,7 @@ jobs:
           llvm-version: ${{ inputs.llvm-version }}
 
       - name: Get kernel source at checkpoint
-        uses: libbpf/ci/get-linux-source@v3
+        uses: shunghsiyu/libbpf-ci/get-linux-source@v3
         with:
           repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git'
           rev: 'linux-6.12.y'
