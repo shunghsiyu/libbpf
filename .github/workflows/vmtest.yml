@@ -46,7 +46,7 @@ jobs:
         uses: libbpf/ci/get-linux-source@v3
         with:
           repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git'
-          rev: 'f491dd2afe1c2cde1cfb59d6f7f0cf28fa34d88e' # Latest linux-6.12.y
+          rev: 'linux-6.12.y'
           dest: '${{ github.workspace }}/.kernel'
 
       - name: Patch kernel source
