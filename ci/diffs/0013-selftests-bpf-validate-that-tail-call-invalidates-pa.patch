@@ -1,8 +1,8 @@
-From d57bd2dbe451aa6ef4e86360ff42f47a76770923 Mon Sep 17 00:00:00 2001
+From d1a4ff629cebe91099abd702e03321340c37b874 Mon Sep 17 00:00:00 2001
 From: Eduard Zingerman <eddyz87@gmail.com>
 Date: Mon, 9 Dec 2024 20:11:00 -0800
-Subject: [PATCH 8/8] selftests/bpf: validate that tail call invalidates packet
- pointers
+Subject: [PATCH 13/13] selftests/bpf: validate that tail call invalidates
+ packet pointers
 
 Add a test case with a tail call done from a global sub-program. Such
 tails calls should be considered as invalidating packet pointers.

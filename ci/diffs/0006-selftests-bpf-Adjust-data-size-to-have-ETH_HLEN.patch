@@ -1,7 +1,7 @@
 From 15be6c3cfe0ae6bebee6eceeca32a5cfe46f9d19 Mon Sep 17 00:00:00 2001
 From: Shigeru Yoshida <syoshida@redhat.com>
 Date: Wed, 22 Jan 2025 00:06:43 +0900
-Subject: [PATCH 6/8] selftests/bpf: Adjust data size to have ETH_HLEN
+Subject: [PATCH 06/13] selftests/bpf: Adjust data size to have ETH_HLEN
 
 The function bpf_test_init() now returns an error if user_size
 (.data_size_in) is less than ETH_HLEN, causing the tests to
