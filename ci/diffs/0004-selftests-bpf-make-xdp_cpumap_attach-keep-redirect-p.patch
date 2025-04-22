@@ -1,8 +1,8 @@
-From 12addd2d88ea8a79e39d486ffbb63277fa0b813d Mon Sep 17 00:00:00 2001
+From d8c8166dd1de3ae2fbdcb666ad788c726ebaea29 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Alexis=20Lothor=C3=A9=20=28eBPF=20Foundation=29?=
  <alexis.lothore@bootlin.com>
 Date: Wed, 9 Oct 2024 12:12:08 +0200
-Subject: [PATCH 4/6] selftests/bpf: make xdp_cpumap_attach keep redirect prog
+Subject: [PATCH 4/8] selftests/bpf: make xdp_cpumap_attach keep redirect prog
  attached
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8

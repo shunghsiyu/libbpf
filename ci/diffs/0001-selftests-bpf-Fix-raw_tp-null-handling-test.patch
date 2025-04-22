@@ -1,7 +1,7 @@
-From 4978e97542028929526fde15b7bd284b904246ed Mon Sep 17 00:00:00 2001
+From c17577de68e60ae9742a9bf8f7409debd8eff9ec Mon Sep 17 00:00:00 2001
 From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 Date: Fri, 18 Apr 2025 14:09:00 +0800
-Subject: [PATCH 1/6] selftests/bpf: Fix raw_tp null handling test
+Subject: [PATCH 1/8] selftests/bpf: Fix raw_tp null handling test
 
 Commit b2fc4b17fc13, backport of upstream commit 838a10bd2ebf ("bpf:
 Augment raw_tp arguments with PTR_MAYBE_NULL"), was missing the changes

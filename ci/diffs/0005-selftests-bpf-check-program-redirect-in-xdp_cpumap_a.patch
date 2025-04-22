@@ -1,8 +1,8 @@
-From 4d8a11f269b526b802b5e9b74fb60c79309a4724 Mon Sep 17 00:00:00 2001
+From 49c900aaabd40d3285d80e5c76a44680257376cd Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Alexis=20Lothor=C3=A9=20=28eBPF=20Foundation=29?=
  <alexis.lothore@bootlin.com>
 Date: Wed, 9 Oct 2024 12:12:09 +0200
-Subject: [PATCH 5/6] selftests/bpf: check program redirect in
+Subject: [PATCH 5/8] selftests/bpf: check program redirect in
  xdp_cpumap_attach
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8

@@ -1,8 +1,8 @@
-From 660e3fbb64e884f509849d1ae19f8b5870634b4a Mon Sep 17 00:00:00 2001
+From 97b2894b2a6566b9b1b050f6c82d12584d414415 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Alexis=20Lothor=C3=A9=20=28eBPF=20Foundation=29?=
  <alexis.lothore@bootlin.com>
 Date: Wed, 9 Oct 2024 12:12:07 +0200
-Subject: [PATCH 3/6] selftests/bpf: fix bpf_map_redirect call for cpu map test
+Subject: [PATCH 3/8] selftests/bpf: fix bpf_map_redirect call for cpu map test
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
