@@ -49,6 +49,26 @@ jobs:
           rev: 'linux-6.12.y'
           dest: '${{ github.workspace }}/.kernel'
 
+      - name: Get queued stable patches
+        shell: bash
+        run: |
+          set -eEuxo pipefail
+          git clone --branch 'master' --single-branch --depth=1 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/stable-queue.git' '${{ github.workspace }}/.stable-queue'
+
+      - name: Apply queued stable patches
+        shell: bash
+        run: |
+          set -eEuxo pipefail
+          cd '${{ github.workspace }}/.kernel'
+          cat '${{ github.workspace }}/.stable-queue/queue-6.12/series' | while read file; do
+          	if patch --dry-run -N --silent -p1 -s < '${{ github.workspace }}/.stable-queue/queue-6.12/'"$file" 2>/dev/null; then
+          		patch -s -p1 < '${{ github.workspace }}/.stable-queue/queue-6.12/'"$file" 2>/dev/null
+          		echo "Successfully applied ${file}!"
+          	else
+          		echo "Failed to apply ${file}, skipping!"
+          	fi
+          done
+
       - name: Patch kernel source
         uses: libbpf/ci/patch-kernel@v3
         with:
