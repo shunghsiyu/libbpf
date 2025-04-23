@@ -1,8 +1,10 @@
-From 70aa83d9cb3e7884491be38df1b4f3d9864156b7 Mon Sep 17 00:00:00 2001
+From 605fab134f96625362929c247b761f719dfe4303 Mon Sep 17 00:00:00 2001
 From: Eduard Zingerman <eddyz87@gmail.com>
 Date: Wed, 11 Dec 2024 23:07:10 -0800
-Subject: [PATCH 14/15] bpf: fix null dereference when computing
+Subject: [PATCH 13/14] bpf: fix null dereference when computing
  changes_pkt_data of prog w/o subprogs
+
+commit ac6542ad92759cda383ad62b4e4cbfc28136abc1 upstream.
 
 bpf_prog_aux->func field might be NULL if program does not have
 subprograms except for main sub-program. The fixed commit does

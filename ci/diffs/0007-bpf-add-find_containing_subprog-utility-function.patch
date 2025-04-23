@@ -1,7 +1,9 @@
-From c1217d5e34d6d6e419b98b6b705ab14f42aa4ed4 Mon Sep 17 00:00:00 2001
+From 30d074dd1e4e4069634023c7d70b39d4aa7c6862 Mon Sep 17 00:00:00 2001
 From: Eduard Zingerman <eddyz87@gmail.com>
 Date: Mon, 9 Dec 2024 20:10:53 -0800
-Subject: [PATCH 07/15] bpf: add find_containing_subprog() utility function
+Subject: [PATCH 07/14] bpf: add find_containing_subprog() utility function
+
+commit 27e88bc4df1d80888fe1aaca786a7cc6e69587e2 upstream.
 
 Add a utility function, looking for a subprogram containing a given
 instruction index, rewrite find_subprog() to use this function.
@@ -9,6 +11,7 @@ instruction index, rewrite find_subprog() to use this function.
 Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
 Link: https://lore.kernel.org/r/20241210041100.1898468-2-eddyz87@gmail.com
 Signed-off-by: Alexei Starovoitov <ast@kernel.org>
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 ---
  kernel/bpf/verifier.c | 28 ++++++++++++++++++++++++----
  1 file changed, 24 insertions(+), 4 deletions(-)

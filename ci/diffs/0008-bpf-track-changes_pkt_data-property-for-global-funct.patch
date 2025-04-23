@@ -1,8 +1,10 @@
-From 4fe51997706aca9b179e6f6330c0aff3e147c23a Mon Sep 17 00:00:00 2001
+From 5d15cde440909c34191d8d9c93ab9055b9d60c3b Mon Sep 17 00:00:00 2001
 From: Eduard Zingerman <eddyz87@gmail.com>
 Date: Mon, 9 Dec 2024 20:10:55 -0800
-Subject: [PATCH 09/15] bpf: track changes_pkt_data property for global
+Subject: [PATCH 08/14] bpf: track changes_pkt_data property for global
  functions
+
+commit 51081a3f25c742da5a659d7fc6fd77ebfdd555be upstream.
 
 When processing calls to certain helpers, verifier invalidates all
 packet pointers in a current state. For example, consider the
@@ -66,6 +68,7 @@ Closes: https://lore.kernel.org/bpf/0498CA22-5779-4767-9C0C-A9515CEA711F@gmail.c
 Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
 Link: https://lore.kernel.org/r/20241210041100.1898468-4-eddyz87@gmail.com
 Signed-off-by: Alexei Starovoitov <ast@kernel.org>
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 ---
  include/linux/bpf_verifier.h |  1 +
  kernel/bpf/verifier.c        | 32 +++++++++++++++++++++++++++++++-

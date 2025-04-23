@@ -1,8 +1,10 @@
-From 16c22af3bc27b622addb3e9c8cfc46fad59a5cda Mon Sep 17 00:00:00 2001
+From cecc4001f27116aebce0ad812ccdb8dc10107500 Mon Sep 17 00:00:00 2001
 From: Eduard Zingerman <eddyz87@gmail.com>
 Date: Mon, 9 Dec 2024 20:10:58 -0800
-Subject: [PATCH 12/15] selftests/bpf: freplace tests for tracking of
+Subject: [PATCH 11/14] selftests/bpf: freplace tests for tracking of
  changes_packet_data
+
+commit 89ff40890d8f12a7d7e93fb602cc27562f3834f0 upstream.
 
 Try different combinations of global functions replacement:
 - replace function that changes packet data with one that doesn't;
@@ -13,6 +15,7 @@ Try different combinations of global functions replacement:
 Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
 Link: https://lore.kernel.org/r/20241210041100.1898468-7-eddyz87@gmail.com
 Signed-off-by: Alexei Starovoitov <ast@kernel.org>
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 ---
  .../bpf/prog_tests/changes_pkt_data.c         | 76 +++++++++++++++++++
  .../selftests/bpf/progs/changes_pkt_data.c    | 26 +++++++

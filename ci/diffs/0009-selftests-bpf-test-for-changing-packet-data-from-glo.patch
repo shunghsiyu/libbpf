@@ -1,8 +1,10 @@
-From eaf5fc69079ca39cec1f1db06441e823b819bc1a Mon Sep 17 00:00:00 2001
+From e6ff5e88360913f05e62f9702c0f9a466cf60661 Mon Sep 17 00:00:00 2001
 From: Eduard Zingerman <eddyz87@gmail.com>
 Date: Mon, 9 Dec 2024 20:10:56 -0800
-Subject: [PATCH 10/15] selftests/bpf: test for changing packet data from
+Subject: [PATCH 09/14] selftests/bpf: test for changing packet data from
  global functions
+
+commit 3f23ee5590d9605dbde9a5e1d4b97637a4803329 upstream.
 
 Check if verifier is aware of packet pointers invalidation done in
 global functions. Based on a test shared by Nick Zavaritsky in [0].

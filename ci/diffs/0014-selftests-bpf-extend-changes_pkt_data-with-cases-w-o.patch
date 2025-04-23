@@ -1,8 +1,10 @@
-From b3966a112f1dd758202ecd4a6d7afdd96ff2db0f Mon Sep 17 00:00:00 2001
+From 8271bd7f21c22836ebf9a27df8cb115d0f62a9f1 Mon Sep 17 00:00:00 2001
 From: Eduard Zingerman <eddyz87@gmail.com>
 Date: Wed, 11 Dec 2024 23:07:11 -0800
-Subject: [PATCH 15/15] selftests/bpf: extend changes_pkt_data with cases w/o
+Subject: [PATCH 14/14] selftests/bpf: extend changes_pkt_data with cases w/o
  subprograms
+
+commit 04789af756a4a43e72986185f66f148e65b32fed upstream.
 
 Extend changes_pkt_data tests with test cases freplacing the main
 program that does not have subprograms. Try four combinations when

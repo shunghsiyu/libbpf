@@ -1,8 +1,10 @@
-From 4f3f2268b9ccdbeef29cf7bbf11cc78f07e50ae0 Mon Sep 17 00:00:00 2001
+From 66db99ac482bfe23ccd6ee7e5d7e99ace80fe1f5 Mon Sep 17 00:00:00 2001
 From: Eduard Zingerman <eddyz87@gmail.com>
 Date: Mon, 9 Dec 2024 20:10:57 -0800
-Subject: [PATCH 11/15] bpf: check changes_pkt_data property for extension
+Subject: [PATCH 10/14] bpf: check changes_pkt_data property for extension
  programs
+
+commit 81f6d0530ba031b5f038a091619bf2ff29568852 upstream.
 
 When processing calls to global sub-programs, verifier decides whether
 to invalidate all packet pointers in current state depending on the
@@ -47,6 +49,10 @@ Suggested-by: Alexei Starovoitov <alexei.starovoitov@gmail.com>
 Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
 Link: https://lore.kernel.org/r/20241210041100.1898468-6-eddyz87@gmail.com
 Signed-off-by: Alexei Starovoitov <ast@kernel.org>
+[ shung-hsi.yu: both jits_use_priv_stack and priv_stack_requested fields are
+missing from context because "bpf: Support private stack for bpf progs" series
+is not present.]
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 ---
  include/linux/bpf.h   |  1 +
  kernel/bpf/verifier.c | 16 ++++++++++++----
