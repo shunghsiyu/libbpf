@@ -1,7 +1,7 @@
 From eaf5fc69079ca39cec1f1db06441e823b819bc1a Mon Sep 17 00:00:00 2001
 From: Eduard Zingerman <eddyz87@gmail.com>
 Date: Mon, 9 Dec 2024 20:10:56 -0800
-Subject: [PATCH 10/13] selftests/bpf: test for changing packet data from
+Subject: [PATCH 10/15] selftests/bpf: test for changing packet data from
  global functions
 
 Check if verifier is aware of packet pointers invalidation done in

@@ -1,7 +1,7 @@
 From 696f6141e289d75d259caa4232889102427d5b71 Mon Sep 17 00:00:00 2001
 From: Eduard Zingerman <eddyz87@gmail.com>
 Date: Mon, 9 Dec 2024 20:10:54 -0800
-Subject: [PATCH 08/13] bpf: refactor bpf_helper_changes_pkt_data to use helper
+Subject: [PATCH 08/15] bpf: refactor bpf_helper_changes_pkt_data to use helper
  number
 
 Use BPF helper number instead of function pointer in

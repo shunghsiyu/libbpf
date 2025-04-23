@@ -1,7 +1,7 @@
 From 16c22af3bc27b622addb3e9c8cfc46fad59a5cda Mon Sep 17 00:00:00 2001
 From: Eduard Zingerman <eddyz87@gmail.com>
 Date: Mon, 9 Dec 2024 20:10:58 -0800
-Subject: [PATCH 12/13] selftests/bpf: freplace tests for tracking of
+Subject: [PATCH 12/15] selftests/bpf: freplace tests for tracking of
  changes_packet_data
 
 Try different combinations of global functions replacement:

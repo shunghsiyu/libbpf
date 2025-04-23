@@ -1,7 +1,7 @@
 From 4fe51997706aca9b179e6f6330c0aff3e147c23a Mon Sep 17 00:00:00 2001
 From: Eduard Zingerman <eddyz87@gmail.com>
 Date: Mon, 9 Dec 2024 20:10:55 -0800
-Subject: [PATCH 09/13] bpf: track changes_pkt_data property for global
+Subject: [PATCH 09/15] bpf: track changes_pkt_data property for global
  functions
 
 When processing calls to certain helpers, verifier invalidates all

@@ -1,7 +1,7 @@
 From c1217d5e34d6d6e419b98b6b705ab14f42aa4ed4 Mon Sep 17 00:00:00 2001
 From: Eduard Zingerman <eddyz87@gmail.com>
 Date: Mon, 9 Dec 2024 20:10:53 -0800
-Subject: [PATCH 07/13] bpf: add find_containing_subprog() utility function
+Subject: [PATCH 07/15] bpf: add find_containing_subprog() utility function
 
 Add a utility function, looking for a subprogram containing a given
 instruction index, rewrite find_subprog() to use this function.
