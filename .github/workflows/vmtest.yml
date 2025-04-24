@@ -31,6 +31,10 @@ jobs:
   vmtest:
     name: pahole@${{ inputs.pahole }}
     runs-on: ${{ inputs.runs_on }}
+    strategy:
+      matrix:
+        target:
+          - '6.12'
     steps:
 
       - uses: actions/checkout@v4
@@ -46,7 +50,7 @@ jobs:
         uses: shunghsiyu/libbpf-ci/get-linux-source@v3
         with:
           repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git'
-          rev: 'linux-6.12.y'
+          rev: 'linux-${{ matrix.target }}.y'
           dest: '${{ github.workspace }}/.kernel'
 
       - name: Get queued stable patches
@@ -60,9 +64,9 @@ jobs:
         run: |
           set -eEuxo pipefail
           cd '${{ github.workspace }}/.kernel'
-          cat '${{ github.workspace }}/.stable-queue/queue-6.12/series' | while read file; do
-          	if patch --dry-run -N --silent -p1 -s < '${{ github.workspace }}/.stable-queue/queue-6.12/'"$file" 2>/dev/null; then
-          		patch -s -p1 < '${{ github.workspace }}/.stable-queue/queue-6.12/'"$file" 2>/dev/null
+          cat '${{ github.workspace }}/.stable-queue/queue-${{ matrix.target }}/series' | while read file; do
+          	if patch --dry-run -N --silent -p1 -s < '${{ github.workspace }}/.stable-queue/queue-${{ matrix.target }}/'"$file" 2>/dev/null; then
+          		patch -s -p1 < '${{ github.workspace }}/.stable-queue/queue-${{ matrix.target }}/'"$file" 2>/dev/null
           		echo "Successfully applied ${file}!"
           	else
           		echo "Failed to apply ${file}, skipping!"
