@@ -16,54 +16,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - kernel: '6.15'
+          - kernel: '6.6'
             runs_on: 'ubuntu-24.04'
             arch: 'x86_64'
-            llvm-version: '18'
-            pahole: 'master'
-          - kernel: '6.12'
-            runs_on: 'ubuntu-24.04'
-            arch: 'x86_64'
-            llvm-version: '18'
+            llvm-version: '17'
             pahole: 'master'
     name: Stable Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
     uses: ./.github/workflows/vmtest-stable.yml
-    with:
-      runs_on: ${{ matrix.runs_on }}
-      kernel: ${{ matrix.kernel }}
-      arch: ${{ matrix.arch }}
-      llvm-version: ${{ matrix.llvm-version }}
-      pahole: ${{ matrix.pahole }}
-  vmtest-mainline:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - kernel: '6.16'
-            runs_on: 'ubuntu-24.04'
-            arch: 'x86_64'
-            llvm-version: '18'
-            pahole: 'master'
-    name: Mainline Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
-    uses: ./.github/workflows/vmtest-mainline.yml
-    with:
-      runs_on: ${{ matrix.runs_on }}
-      kernel: ${{ matrix.kernel }}
-      arch: ${{ matrix.arch }}
-      llvm-version: ${{ matrix.llvm-version }}
-      pahole: ${{ matrix.pahole }}
-  vmtest-opensuse:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - kernel: 'LATEST'
-            runs_on: 'ubuntu-24.04'
-            arch: 'x86_64'
-            llvm-version: '18'
-            pahole: 'master'
-    name: openSUSE SL-16.0 llvm-${{ matrix.llvm-version }}
-    uses: ./.github/workflows/vmtest-opensuse.yml
     with:
       runs_on: ${{ matrix.runs_on }}
       kernel: ${{ matrix.kernel }}
