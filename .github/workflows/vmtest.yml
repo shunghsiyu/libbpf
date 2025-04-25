@@ -58,6 +58,11 @@ jobs:
         shell: bash
         run: |
           cd '${{ github.workspace }}/.kernel'
+          if [[ ! -d '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/' ]]; then
+            # When stable are just release and there's no patch queued, the
+            # directory is removed.
+          	exit 0
+          fi
           cat '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/series' | while read file; do
           	if patch --dry-run -N --silent -p1 -s < '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/'"$file" 2>/dev/null; then
           		patch -s -p1 < '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/'"$file" 2>/dev/null
