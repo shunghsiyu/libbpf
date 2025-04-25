@@ -99,6 +99,17 @@ jobs:
           rev: 'master'
           dest: '${{ github.workspace }}/.bpf-next'
 
+      - name: Configure bpf-next
+        shell: bash
+        run: |
+          cd .bpf-next
+          cat ${{ github.workspace }}/.kernel/tools/testing/selftests/bpf/config \
+              ${{ github.workspace }}/.kernel/tools/testing/selftests/bpf/config.${{ inputs.arch }} > .config
+          # this file might or might not exist depending on kernel version
+          cat ${{ github.workspace }}/.kernel/tools/testing/selftests/bpf/config.vm >> .config || :
+          make olddefconfig && make prepare
+          cd -
+
       - name: Build selftests/bpf
         uses: libbpf/ci/build-selftests@v3
         env:
