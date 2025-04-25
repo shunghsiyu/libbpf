@@ -114,6 +114,7 @@ jobs:
           cat ${{ github.workspace }}/.kernel/tools/testing/selftests/bpf/config.vm >> .config || :
           make olddefconfig && make prepare
           cp ${{ github.workspace }}/.kernel/Module.symvers ./
+          cp ${{ github.workspace }}/.kernel/vmlinux ./
           cd -
 
       - name: Build selftests/bpf
