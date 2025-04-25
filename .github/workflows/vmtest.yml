@@ -31,11 +31,6 @@ jobs:
   vmtest:
     name: pahole@${{ inputs.pahole }}
     runs-on: ${{ inputs.runs_on }}
-    strategy:
-      matrix:
-        target:
-          - '6.12'
-          - '6.14'
     steps:
 
       - uses: actions/checkout@v4
@@ -51,7 +46,7 @@ jobs:
         uses: shunghsiyu/libbpf-ci/get-linux-source@v3
         with:
           repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git'
-          rev: 'linux-${{ matrix.target }}.y'
+          rev: 'linux-${{ inputs.kernel }}.y'
           dest: '${{ github.workspace }}/.kernel'
 
       - name: Get queued stable patches
@@ -65,9 +60,9 @@ jobs:
         run: |
           set -eEuxo pipefail
           cd '${{ github.workspace }}/.kernel'
-          cat '${{ github.workspace }}/.stable-queue/queue-${{ matrix.target }}/series' | while read file; do
-          	if patch --dry-run -N --silent -p1 -s < '${{ github.workspace }}/.stable-queue/queue-${{ matrix.target }}/'"$file" 2>/dev/null; then
-          		patch -s -p1 < '${{ github.workspace }}/.stable-queue/queue-${{ matrix.target }}/'"$file" 2>/dev/null
+          cat '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/series' | while read file; do
+          	if patch --dry-run -N --silent -p1 -s < '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/'"$file" 2>/dev/null; then
+          		patch -s -p1 < '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/'"$file" 2>/dev/null
           		echo "Successfully applied ${file}!"
           	else
           		echo "Failed to apply ${file}, skipping!"
@@ -92,7 +87,6 @@ jobs:
           cd -
 
       - name: Build kernel image
-        if: ${{ inputs.kernel == 'LATEST' }}
         shell: bash
         run: |
           cd .kernel
@@ -100,19 +94,12 @@ jobs:
           cp vmlinux ${{ github.workspace }}
           cd -
 
-      - name: Download prebuilt kernel
-        if: ${{ inputs.kernel != 'LATEST' }}
-        uses: libbpf/ci/download-vmlinux@v3
-        with:
-          kernel: ${{ inputs.kernel }}
-          arch: ${{ inputs.arch }}
-
       - name: Build selftests/bpf
         uses: libbpf/ci/build-selftests@v3
         env:
           MAX_MAKE_JOBS: 32
           VMLINUX_BTF: ${{ github.workspace }}/vmlinux
-          VMLINUX_H: ${{ inputs.kernel != 'LATEST' && format('{0}/.github/actions/build-selftests/vmlinux.h', github.workspace) || '' }}
+          VMLINUX_H: ''
         with:
           arch: ${{ inputs.arch }}
           kernel-root: ${{ github.workspace }}/.kernel
@@ -133,4 +120,3 @@ jobs:
           kbuild-output: ${{ github.workspace }}/.kernel
           kernel-root: ${{ github.workspace }}/.kernel
           vmlinuz: ${{ inputs.arch }}/vmlinuz-${{ inputs.kernel }}
-
