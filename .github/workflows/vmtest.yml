@@ -52,13 +52,11 @@ jobs:
       - name: Get queued stable patches
         shell: bash
         run: |
-          set -eEuxo pipefail
           git clone --branch 'master' --single-branch --depth=1 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/stable-queue.git' '${{ github.workspace }}/.stable-queue'
 
       - name: Apply queued stable patches
         shell: bash
         run: |
-          set -eEuxo pipefail
           cd '${{ github.workspace }}/.kernel'
           cat '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/series' | while read file; do
           	if patch --dry-run -N --silent -p1 -s < '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/'"$file" 2>/dev/null; then
