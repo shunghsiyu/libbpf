@@ -35,6 +35,7 @@ jobs:
       matrix:
         target:
           - '6.12'
+          - '6.14'
     steps:
 
       - uses: actions/checkout@v4
