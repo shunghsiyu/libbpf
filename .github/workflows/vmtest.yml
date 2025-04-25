@@ -92,6 +92,13 @@ jobs:
           cp vmlinux ${{ github.workspace }}
           cd -
 
+      - name: Get latest bpf-next kernel source
+        uses: shunghsiyu/libbpf-ci/get-linux-source@v3
+        with:
+          repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git'
+          rev: 'master'
+          dest: '${{ github.workspace }}/.bpf-next'
+
       - name: Build selftests/bpf
         uses: libbpf/ci/build-selftests@v3
         env:
@@ -100,7 +107,7 @@ jobs:
           VMLINUX_H: ''
         with:
           arch: ${{ inputs.arch }}
-          kernel-root: ${{ github.workspace }}/.kernel
+          kernel-root: ${{ github.workspace }}/.bpf-next
           llvm-version: ${{ inputs.llvm-version }}
 
       - name: Run selftests
@@ -110,7 +117,7 @@ jobs:
           KERNEL: ${{ inputs.kernel }}
           VMLINUX: ${{ github.workspace }}/vmlinux
           LLVM_VERSION: ${{ inputs.llvm-version }}
-          SELFTESTS_BPF: ${{ github.workspace }}/.kernel/tools/testing/selftests/bpf
+          SELFTESTS_BPF: ${{ github.workspace }}/.bpf-next/tools/testing/selftests/bpf
           VMTEST_CONFIGS: ${{ github.workspace }}/ci/vmtest/configs
         uses: libbpf/ci/run-vmtest@v3
         with:
