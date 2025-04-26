@@ -72,12 +72,6 @@ jobs:
           	fi
           done
 
-      - name: Patch kernel source
-        uses: libbpf/ci/patch-kernel@v3
-        with:
-          patches-root: '${{ github.workspace }}/ci/diffs'
-          repo-root: '.kernel'
-
       - name: Configure kernel build
         shell: bash
         run: |
@@ -103,6 +97,12 @@ jobs:
           repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git'
           rev: 'master'
           dest: '${{ github.workspace }}/.bpf-next'
+
+      - name: Patch bpf-next kernel source
+        uses: libbpf/ci/patch-kernel@v3
+        with:
+          patches-root: '${{ github.workspace }}/ci/diffs'
+          repo-root: '.bpf-next'
 
       - name: Configure bpf-next
         shell: bash

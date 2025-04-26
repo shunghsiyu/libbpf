@@ -1,0 +1,25 @@
+From 06255078500dd758a18731ffe4de7d223c8db059 Mon Sep 17 00:00:00 2001
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+Date: Sat, 26 Apr 2025 09:22:42 +0000
+Subject: [PATCH 7/8] HACK
+
+---
+ tools/testing/selftests/bpf/progs/profiler.inc.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tools/testing/selftests/bpf/progs/profiler.inc.h b/tools/testing/selftests/bpf/progs/profiler.inc.h
+index 813143b4985d..8bd1ebd7d6af 100644
+--- a/tools/testing/selftests/bpf/progs/profiler.inc.h
++++ b/tools/testing/selftests/bpf/progs/profiler.inc.h
+@@ -223,7 +223,7 @@ static INLINE void* read_full_cgroup_path(struct kernfs_node* cgroup_node,
+ 		if (bpf_cmp_likely(filepart_length, <=, MAX_PATH)) {
+ 			payload += filepart_length;
+ 		}
+-		cgroup_node = BPF_CORE_READ(cgroup_node, __parent);
++		cgroup_node = BPF_CORE_READ(cgroup_node, parent);
+ 	}
+ 	return payload;
+ }
+-- 
+2.49.0
+

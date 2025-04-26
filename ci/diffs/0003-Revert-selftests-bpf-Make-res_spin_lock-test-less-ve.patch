@@ -1,0 +1,32 @@
+From 0179aa3b4d1c8758be681fe988d1ee5fc8d2acc7 Mon Sep 17 00:00:00 2001
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+Date: Sat, 26 Apr 2025 09:14:41 +0000
+Subject: [PATCH 3/8] Revert "selftests/bpf: Make res_spin_lock test less
+ verbose"
+
+This reverts commit 9bae8f4f21689b96a4b4fc505740dd97b9142c41.
+---
+ tools/testing/selftests/bpf/prog_tests/res_spin_lock.c | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/res_spin_lock.c b/tools/testing/selftests/bpf/prog_tests/res_spin_lock.c
+index 0703e987df89..115287ba441b 100644
+--- a/tools/testing/selftests/bpf/prog_tests/res_spin_lock.c
++++ b/tools/testing/selftests/bpf/prog_tests/res_spin_lock.c
+@@ -25,11 +25,8 @@ static void *spin_lock_thread(void *arg)
+ 
+ 	while (!READ_ONCE(skip)) {
+ 		err = bpf_prog_test_run_opts(prog_fd, &topts);
+-		if (err || topts.retval) {
+-			ASSERT_OK(err, "test_run");
+-			ASSERT_OK(topts.retval, "test_run retval");
+-			break;
+-		}
++		ASSERT_OK(err, "test_run");
++		ASSERT_OK(topts.retval, "test_run retval");
+ 	}
+ 	pthread_exit(arg);
+ }
+-- 
+2.49.0
+

@@ -1,0 +1,52 @@
+From 2e94c0c186c568520fb015545686575470e9123c Mon Sep 17 00:00:00 2001
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+Date: Sat, 26 Apr 2025 09:15:18 +0000
+Subject: [PATCH 4/8] Revert "selftests/bpf: Make res_spin_lock AA test
+ condition stronger"
+
+This reverts commit 1ddb9ad2ac6e527f220d5821ad54d37d3f9d122a.
+---
+ tools/testing/selftests/bpf/progs/res_spin_lock.c | 10 +++-------
+ 1 file changed, 3 insertions(+), 7 deletions(-)
+
+diff --git a/tools/testing/selftests/bpf/progs/res_spin_lock.c b/tools/testing/selftests/bpf/progs/res_spin_lock.c
+index 22c4fb8b9266..b33385dfbd35 100644
+--- a/tools/testing/selftests/bpf/progs/res_spin_lock.c
++++ b/tools/testing/selftests/bpf/progs/res_spin_lock.c
+@@ -38,14 +38,13 @@ int res_spin_lock_test(struct __sk_buff *ctx)
+ 	r = bpf_res_spin_lock(&elem1->lock);
+ 	if (r)
+ 		return r;
+-	r = bpf_res_spin_lock(&elem2->lock);
+-	if (!r) {
++	if (!bpf_res_spin_lock(&elem2->lock)) {
+ 		bpf_res_spin_unlock(&elem2->lock);
+ 		bpf_res_spin_unlock(&elem1->lock);
+ 		return -1;
+ 	}
+ 	bpf_res_spin_unlock(&elem1->lock);
+-	return r != -EDEADLK;
++	return 0;
+ }
+ 
+ SEC("tc")
+@@ -125,15 +124,12 @@ int res_spin_lock_test_held_lock_max(struct __sk_buff *ctx)
+ 	/* Trigger AA, after exhausting entries in the held lock table. This
+ 	 * time, only the timeout can save us, as AA detection won't succeed.
+ 	 */
+-	ret = bpf_res_spin_lock(locks[34]);
+-	if (!ret) {
++	if (!bpf_res_spin_lock(locks[34])) {
+ 		bpf_res_spin_unlock(locks[34]);
+ 		ret = 1;
+ 		goto end;
+ 	}
+ 
+-	ret = ret != -ETIMEDOUT ? 2 : 0;
+-
+ end:
+ 	for (i = i - 1; i >= 0; i--)
+ 		bpf_res_spin_unlock(locks[i]);
+-- 
+2.49.0
+
