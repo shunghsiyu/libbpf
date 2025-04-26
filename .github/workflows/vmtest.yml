@@ -118,11 +118,12 @@ jobs:
           cd -
 
       - name: Build selftests/bpf
-        uses: libbpf/ci/build-selftests@v3
+        uses: shunghsiyu/libbpf-ci/build-selftests@v3
         env:
           MAX_MAKE_JOBS: 32
           VMLINUX_BTF: ${{ github.workspace }}/vmlinux
           VMLINUX_H: ''
+          KDIR: ${{ github.workspace }}/.kernel
         with:
           arch: ${{ inputs.arch }}
           kernel-root: ${{ github.workspace }}/.bpf-next
