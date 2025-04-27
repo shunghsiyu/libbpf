@@ -115,7 +115,7 @@ jobs:
       - name: Build selftests/bpf
         uses: shunghsiyu/libbpf-ci/build-selftests@v3
         env:
-          MAX_MAKE_JOBS: 32
+          MAX_MAKE_JOBS: 1
           VMLINUX_BTF: ${{ github.workspace }}/vmlinux
           VMLINUX_H: ''
           KDIR: ${{ github.workspace }}/.kernel
