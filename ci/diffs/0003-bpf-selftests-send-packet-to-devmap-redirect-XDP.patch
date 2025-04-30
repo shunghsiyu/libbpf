@@ -1,7 +1,7 @@
 From 2b610275ad54eeaf493b427e44c0da066a114f56 Mon Sep 17 00:00:00 2001
 From: Florian Kauer <florian.kauer@linutronix.de>
 Date: Wed, 11 Sep 2024 10:41:19 +0200
-Subject: [PATCH 3/7] bpf: selftests: send packet to devmap redirect XDP
+Subject: [PATCH 03/17] bpf: selftests: send packet to devmap redirect XDP
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
