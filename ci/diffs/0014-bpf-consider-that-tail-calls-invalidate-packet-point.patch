@@ -1,4 +1,4 @@
-From 8c1a4af453dd1531f9d8d61f8e2cd9f9a43b55c5 Mon Sep 17 00:00:00 2001
+From 8c56766b860a6f80d7483b963ef2bba1cb42c58b Mon Sep 17 00:00:00 2001
 From: Eduard Zingerman <eddyz87@gmail.com>
 Date: Mon, 9 Dec 2024 20:10:59 -0800
 Subject: [PATCH 14/17] bpf: consider that tail calls invalidate packet
@@ -38,6 +38,8 @@ tailcall_freplace.c:entry_freplace() that does a tail call.
 Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
 Link: https://lore.kernel.org/r/20241210041100.1898468-8-eddyz87@gmail.com
 Signed-off-by: Alexei Starovoitov <ast@kernel.org>
+[ shung-hsi.yu: drop changes to tools/testing/selftests/bpf/progs/tc_bpf2bpf.c
+because it is not present. ]
 Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 ---
  net/core/filter.c | 2 ++
