@@ -1,4 +1,4 @@
-From 557c25eccee5ba75c77b919e24499fb54a1324b4 Mon Sep 17 00:00:00 2001
+From c2ef5c02571221c923a05885c04c754bea6652e9 Mon Sep 17 00:00:00 2001
 From: Eduard Zingerman <eddyz87@gmail.com>
 Date: Wed, 23 Apr 2025 13:53:28 +0800
 Subject: [PATCH 16/17] bpf: fix null dereference when computing
@@ -44,7 +44,7 @@ Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
  1 file changed, 5 insertions(+), 2 deletions(-)
 
 diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
-index 4eedf421e86f..a35bb2211737 100644
+index d9cf75b765f0..bf8696b96491 100644
 --- a/kernel/bpf/verifier.c
 +++ b/kernel/bpf/verifier.c
 @@ -19908,6 +19908,7 @@ int bpf_check_attach_target(struct bpf_verifier_log *log,

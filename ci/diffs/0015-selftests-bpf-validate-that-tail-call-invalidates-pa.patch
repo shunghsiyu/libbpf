@@ -1,12 +1,10 @@
-From 345088a4bc28a145067bfdfd5e1ecfc6b1c03e8f Mon Sep 17 00:00:00 2001
+From f10900ec0dbcaaa2f1326ff7062d8e4bba82c5c2 Mon Sep 17 00:00:00 2001
 From: Eduard Zingerman <eddyz87@gmail.com>
 Date: Mon, 9 Dec 2024 20:11:00 -0800
 Subject: [PATCH 15/17] selftests/bpf: validate that tail call invalidates
  packet pointers
 
-Patch-mainline: v6.13-rc3
-Git-commit: d9706b56e13b7916461ca6b4b731e169ed44ed09
-References: bsc#1241590
+commit d9706b56e13b7916461ca6b4b731e169ed44ed09 upstream.
 
 Add a test case with a tail call done from a global sub-program. Such
 tails calls should be considered as invalidating packet pointers.
@@ -14,7 +12,7 @@ tails calls should be considered as invalidating packet pointers.
 Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
 Link: https://lore.kernel.org/r/20241210041100.1898468-9-eddyz87@gmail.com
 Signed-off-by: Alexei Starovoitov <ast@kernel.org>
-Acked-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 ---
  .../selftests/bpf/progs/verifier_sock.c       | 28 +++++++++++++++++++
  1 file changed, 28 insertions(+)

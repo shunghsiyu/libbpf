@@ -1,4 +1,4 @@
-From bb0ee972a30b3f4dd40c7bf5abd5658209d05979 Mon Sep 17 00:00:00 2001
+From b986cc574be3f2c2897c7b4d1371c97a299247a9 Mon Sep 17 00:00:00 2001
 From: Eduard Zingerman <eddyz87@gmail.com>
 Date: Wed, 23 Apr 2025 13:53:25 +0800
 Subject: [PATCH 12/17] bpf: check changes_pkt_data property for extension
@@ -49,12 +49,15 @@ Suggested-by: Alexei Starovoitov <alexei.starovoitov@gmail.com>
 Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
 Link: https://lore.kernel.org/r/20241210041100.1898468-6-eddyz87@gmail.com
 Signed-off-by: Alexei Starovoitov <ast@kernel.org>
-[ shung-hsi.yu: ... ]
+[ shung-hsi.yu: adapt to missing fields in "struct bpf_prog_aux". Context
+difference in jit_subprogs() because BPF Exception is not supported. Context
+difference in bpf_check() because commit 5b5f51bff1b6 "bpf:
+no_caller_saved_registers attribute for helper calls" is not present. ]
 Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 ---
  include/linux/bpf.h   |  1 +
- kernel/bpf/verifier.c | 20 ++++++++++++++------
- 2 files changed, 15 insertions(+), 6 deletions(-)
+ kernel/bpf/verifier.c | 16 ++++++++++++----
+ 2 files changed, 13 insertions(+), 4 deletions(-)
 
 diff --git a/include/linux/bpf.h b/include/linux/bpf.h
 index 035e627f94f6..17de12a98f85 100644
@@ -69,7 +72,7 @@ index 035e627f94f6..17de12a98f85 100644
  	const struct btf_type *attach_func_proto;
  	/* function name for valid attach_btf_id */
 diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
-index 154513999e03..4eedf421e86f 100644
+index 154513999e03..d9cf75b765f0 100644
 --- a/kernel/bpf/verifier.c
 +++ b/kernel/bpf/verifier.c
 @@ -15462,6 +15462,7 @@ static int check_cfg(struct bpf_verifier_env *env)
@@ -112,21 +115,17 @@ index 154513999e03..4eedf421e86f 100644
  	ret = resolve_pseudo_ldimm64(env);
  	if (ret < 0)
  		goto skip_full_check;
-@@ -20379,8 +20383,12 @@ int bpf_check(struct bpf_prog **prog, union bpf_attr *attr, bpfptr_t uattr, __u3
+@@ -20379,6 +20383,10 @@ int bpf_check(struct bpf_prog **prog, union bpf_attr *attr, bpfptr_t uattr, __u3
  	if (ret < 0)
  		goto skip_full_check;
  
--	ret = do_check_subprogs(env);
--	ret = ret ?: do_check_main(env);
 +	ret = check_attach_btf_id(env);
 +	if (ret)
 +		goto skip_full_check;
 +
-+	ret = do_check_main(env);
-+	ret = ret ?: do_check_subprogs(env);
+ 	ret = do_check_subprogs(env);
+ 	ret = ret ?: do_check_main(env);
  
- 	if (ret == 0 && bpf_prog_is_offloaded(env->prog->aux))
- 		ret = bpf_prog_offload_finalize(env);
 -- 
 2.49.0
 

@@ -1,4 +1,4 @@
-From 34f52123c7d525c65d589c57ac91c735a3564412 Mon Sep 17 00:00:00 2001
+From 3052a2892c85e30bceb67e5fa6ff380b3f8b5cb4 Mon Sep 17 00:00:00 2001
 From: Eduard Zingerman <eddyz87@gmail.com>
 Date: Mon, 9 Dec 2024 20:10:55 -0800
 Subject: [PATCH 10/17] bpf: track changes_pkt_data property for global
@@ -68,6 +68,10 @@ Closes: https://lore.kernel.org/bpf/0498CA22-5779-4767-9C0C-A9515CEA711F@gmail.c
 Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
 Link: https://lore.kernel.org/r/20241210041100.1898468-4-eddyz87@gmail.com
 Signed-off-by: Alexei Starovoitov <ast@kernel.org>
+[shung-hsi.yu: do not use bitfield in "struct bpf_subprog_info" because commit
+406a6fa44bfb ("bpf: use bitfields for simple per-subprog bool flags") is not
+present and minor context difference in check_func_call() because commit
+491dd8edecbc ("bpf: Emit global subprog name in verifier logs") is not present. ]
 Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 ---
  include/linux/bpf_verifier.h |  1 +
