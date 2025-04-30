@@ -1,7 +1,7 @@
 From 32e59ea0df9f0e1af144658d62798fc7689cbaee Mon Sep 17 00:00:00 2001
 From: Shigeru Yoshida <syoshida@redhat.com>
 Date: Wed, 22 Jan 2025 00:06:43 +0900
-Subject: [PATCH 7/7] selftests/bpf: Adjust data size to have ETH_HLEN
+Subject: [PATCH 07/17] selftests/bpf: Adjust data size to have ETH_HLEN
 
 commit c7f2188d68c114095660a950b7e880a1e5a71c8f upstream.
 
