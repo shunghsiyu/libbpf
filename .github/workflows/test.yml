@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  vmtest:
+  vmtest-stable:
     strategy:
       fail-fast: false
       matrix:
@@ -27,7 +27,7 @@ jobs:
             llvm-version: '18'
             pahole: 'master'
     name: Stable Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
-    uses: ./.github/workflows/vmtest.yml
+    uses: ./.github/workflows/vmtest-stable.yml
     with:
       runs_on: ${{ matrix.runs_on }}
       kernel: ${{ matrix.kernel }}
