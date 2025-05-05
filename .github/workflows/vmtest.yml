@@ -52,7 +52,13 @@ jobs:
       - name: Get queued stable patches
         shell: bash
         run: |
-          git clone --branch 'master' --single-branch --depth=1 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/stable-queue.git' '${{ github.workspace }}/.stable-queue'
+          git clone --branch 'master' --single-branch --filter=blob:none --depth=1 --sparse 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/stable-queue.git' '${{ github.workspace }}/.stable-queue'
+          cd '${{ github.workspace }}/.stable-queue'
+          if ! grep -e '^${{ inputs.kernel }}$' active_kernel_versions >/dev/null; then
+          	echo 'Stable ${{ inputs.kernel }} not actively maintained anymore, failing'
+          	exit 1
+          fi
+          git sparse-checkout set 'queue-${{ inputs.kernel }}/'
 
       - name: Apply queued stable patches
         shell: bash
