@@ -1,0 +1,176 @@
+diff --git a/kernel/bpf/arena.c b/kernel/bpf/arena.c
+index 17cd622..8c775a1 100644
+--- a/kernel/bpf/arena.c
++++ b/kernel/bpf/arena.c
+@@ -212,7 +212,7 @@ static u64 arena_map_mem_usage(const struct bpf_map *map)
+ struct vma_list {
+ 	struct vm_area_struct *vma;
+ 	struct list_head head;
+-	atomic_t mmap_count;
++	refcount_t mmap_count;
+ };
+ 
+ static int remember_vma(struct bpf_arena *arena, struct vm_area_struct *vma)
+@@ -222,7 +222,7 @@ static int remember_vma(struct bpf_arena *arena, struct vm_area_struct *vma)
+ 	vml = kmalloc(sizeof(*vml), GFP_KERNEL);
+ 	if (!vml)
+ 		return -ENOMEM;
+-	atomic_set(&vml->mmap_count, 1);
++	refcount_set(&vml->mmap_count, 1);
+ 	vma->vm_private_data = vml;
+ 	vml->vma = vma;
+ 	list_add(&vml->head, &arena->vma_list);
+@@ -233,7 +233,7 @@ static void arena_vm_open(struct vm_area_struct *vma)
+ {
+ 	struct vma_list *vml = vma->vm_private_data;
+ 
+-	atomic_inc(&vml->mmap_count);
++	refcount_inc(&vml->mmap_count);
+ }
+ 
+ static void arena_vm_close(struct vm_area_struct *vma)
+@@ -242,7 +242,7 @@ static void arena_vm_close(struct vm_area_struct *vma)
+ 	struct bpf_arena *arena = container_of(map, struct bpf_arena, map);
+ 	struct vma_list *vml = vma->vm_private_data;
+ 
+-	if (!atomic_dec_and_test(&vml->mmap_count))
++	if (!refcount_dec_and_test(&vml->mmap_count))
+ 		return;
+ 	guard(mutex)(&arena->lock);
+ 	/* update link list under lock */
+diff --git a/tools/testing/selftests/bpf/Makefile b/tools/testing/selftests/bpf/Makefile
+index 50fb805..e315e52 100644
+--- a/tools/testing/selftests/bpf/Makefile
++++ b/tools/testing/selftests/bpf/Makefile
+@@ -193,9 +193,9 @@ ifeq ($(shell expr $(MAKE_VERSION) \>= 4.4), 1)
+ $(let OUTPUT,$(OUTPUT)/,\
+ 	$(eval include ../../../build/Makefile.feature))
+ else
+-OUTPUT := $(OUTPUT)/
++override OUTPUT := $(OUTPUT)/
+ $(eval include ../../../build/Makefile.feature)
+-OUTPUT := $(patsubst %/,%,$(OUTPUT))
++override OUTPUT := $(patsubst %/,%,$(OUTPUT))
+ endif
+ endif
+ 
+diff --git a/tools/testing/selftests/bpf/prog_tests/bloom_filter_map.c b/tools/testing/selftests/bpf/prog_tests/bloom_filter_map.c
+index cc184e4..67557cd 100644
+--- a/tools/testing/selftests/bpf/prog_tests/bloom_filter_map.c
++++ b/tools/testing/selftests/bpf/prog_tests/bloom_filter_map.c
+@@ -6,6 +6,10 @@
+ #include <test_progs.h>
+ #include "bloom_filter_map.skel.h"
+ 
++#ifndef NUMA_NO_NODE
++#define NUMA_NO_NODE	(-1)
++#endif
++
+ static void test_fail_cases(void)
+ {
+ 	LIBBPF_OPTS(bpf_map_create_opts, opts);
+@@ -69,6 +73,7 @@ static void test_success_cases(void)
+ 
+ 	/* Create a map */
+ 	opts.map_flags = BPF_F_ZERO_SEED | BPF_F_NUMA_NODE;
++	opts.numa_node = NUMA_NO_NODE;
+ 	fd = bpf_map_create(BPF_MAP_TYPE_BLOOM_FILTER, NULL, 0, sizeof(value), 100, &opts);
+ 	if (!ASSERT_GE(fd, 0, "bpf_map_create bloom filter success case"))
+ 		return;
+diff --git a/tools/testing/selftests/bpf/prog_tests/fill_link_info.c b/tools/testing/selftests/bpf/prog_tests/fill_link_info.c
+index d50cbd8..e59af2a 100644
+--- a/tools/testing/selftests/bpf/prog_tests/fill_link_info.c
++++ b/tools/testing/selftests/bpf/prog_tests/fill_link_info.c
+@@ -171,6 +171,10 @@ static void test_kprobe_fill_link_info(struct test_fill_link_info *skel,
+ 		/* See also arch_adjust_kprobe_addr(). */
+ 		if (skel->kconfig->CONFIG_X86_KERNEL_IBT)
+ 			entry_offset = 4;
++		if (skel->kconfig->CONFIG_PPC64 &&
++		    skel->kconfig->CONFIG_KPROBES_ON_FTRACE &&
++		    !skel->kconfig->CONFIG_PPC_FTRACE_OUT_OF_LINE)
++			entry_offset = 4;
+ 		err = verify_perf_link_info(link_fd, type, kprobe_addr, 0, entry_offset);
+ 		ASSERT_OK(err, "verify_perf_link_info");
+ 	} else {
+diff --git a/tools/testing/selftests/bpf/progs/bpf_misc.h b/tools/testing/selftests/bpf/progs/bpf_misc.h
+index f45f435..02c9f79 100644
+--- a/tools/testing/selftests/bpf/progs/bpf_misc.h
++++ b/tools/testing/selftests/bpf/progs/bpf_misc.h
+@@ -172,6 +172,9 @@
+ #elif defined(__TARGET_ARCH_riscv)
+ #define SYSCALL_WRAPPER 1
+ #define SYS_PREFIX "__riscv_"
++#elif defined(__TARGET_ARCH_powerpc)
++#define SYSCALL_WRAPPER 1
++#define SYS_PREFIX ""
+ #else
+ #define SYSCALL_WRAPPER 0
+ #define SYS_PREFIX "__se_"
+diff --git a/tools/testing/selftests/bpf/progs/test_fill_link_info.c b/tools/testing/selftests/bpf/progs/test_fill_link_info.c
+index 6afa834..fac33a1 100644
+--- a/tools/testing/selftests/bpf/progs/test_fill_link_info.c
++++ b/tools/testing/selftests/bpf/progs/test_fill_link_info.c
+@@ -6,13 +6,20 @@
+ #include <stdbool.h>
+ 
+ extern bool CONFIG_X86_KERNEL_IBT __kconfig __weak;
++extern bool CONFIG_PPC_FTRACE_OUT_OF_LINE __kconfig __weak;
++extern bool CONFIG_KPROBES_ON_FTRACE __kconfig __weak;
++extern bool CONFIG_PPC64 __kconfig __weak;
+ 
+-/* This function is here to have CONFIG_X86_KERNEL_IBT
+- * used and added to object BTF.
++/* This function is here to have CONFIG_X86_KERNEL_IBT,
++ * CONFIG_PPC_FTRACE_OUT_OF_LINE, CONFIG_KPROBES_ON_FTRACE,
++ * CONFIG_PPC6 used and added to object BTF.
+  */
+ int unused(void)
+ {
+-	return CONFIG_X86_KERNEL_IBT ? 0 : 1;
++	return CONFIG_X86_KERNEL_IBT ||
++			CONFIG_PPC_FTRACE_OUT_OF_LINE ||
++			CONFIG_KPROBES_ON_FTRACE ||
++			CONFIG_PPC64 ? 0 : 1;
+ }
+ 
+ SEC("kprobe")
+diff --git a/tools/testing/selftests/bpf/test_tc_tunnel.sh b/tools/testing/selftests/bpf/test_tc_tunnel.sh
+index 7989ec6..cb55a90 100755
+--- a/tools/testing/selftests/bpf/test_tc_tunnel.sh
++++ b/tools/testing/selftests/bpf/test_tc_tunnel.sh
+@@ -305,6 +305,7 @@ else
+ 	client_connect
+ 	verify_data
+ 	server_listen
++	wait_for_port ${port} ${netcat_opt}
+ fi
+ 
+ # serverside, use BPF for decap
+diff --git a/tools/testing/selftests/bpf/trace_helpers.c b/tools/testing/selftests/bpf/trace_helpers.c
+index 2d742fd..81943c6 100644
+--- a/tools/testing/selftests/bpf/trace_helpers.c
++++ b/tools/testing/selftests/bpf/trace_helpers.c
+@@ -293,6 +293,10 @@ static int procmap_query(int fd, const void *addr, __u32 query_flags, size_t *st
+ 	return 0;
+ }
+ #else
++# ifndef PROCMAP_QUERY_VMA_EXECUTABLE
++#  define PROCMAP_QUERY_VMA_EXECUTABLE 0x04
++# endif
++
+ static int procmap_query(int fd, const void *addr, __u32 query_flags, size_t *start, size_t *offset, int *flags)
+ {
+ 	return -EOPNOTSUPP;
+diff --git a/tools/testing/selftests/bpf/xdp_hw_metadata.c b/tools/testing/selftests/bpf/xdp_hw_metadata.c
+index 6f9956e..ad6c08d 100644
+--- a/tools/testing/selftests/bpf/xdp_hw_metadata.c
++++ b/tools/testing/selftests/bpf/xdp_hw_metadata.c
+@@ -79,7 +79,7 @@ static int open_xsk(int ifindex, struct xsk *xsk, __u32 queue_id)
+ 		.fill_size = XSK_RING_PROD__DEFAULT_NUM_DESCS,
+ 		.comp_size = XSK_RING_CONS__DEFAULT_NUM_DESCS,
+ 		.frame_size = XSK_UMEM__DEFAULT_FRAME_SIZE,
+-		.flags = XSK_UMEM__DEFAULT_FLAGS,
++		.flags = XDP_UMEM_TX_METADATA_LEN,
+ 		.tx_metadata_len = sizeof(struct xsk_tx_metadata),
+ 	};
+ 	__u32 idx = 0;
