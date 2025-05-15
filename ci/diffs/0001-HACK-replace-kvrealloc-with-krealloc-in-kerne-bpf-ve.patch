@@ -1,0 +1,34 @@
+From 6175e2e7bc505368908a991bfce875cafb13867d Mon Sep 17 00:00:00 2001
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+Date: Thu, 15 May 2025 13:20:20 +0800
+Subject: [PATCH 1/1] HACK: replace kvrealloc() with krealloc() in
+ kerne/bpf/verifier.c
+
+Try to see if mm-vmalloc-support-more-granular-vrealloc-sizing.patch in
+stable/linux-6.14.y is really the curprit by switching to krealloc() from
+kvrealloc() so that the vrealloc() code path is not called. This means the
+allocated memory are now continuous physically, so would be more likely to
+fail; but for testing puropse this is probably fine.
+
+Link: https://lore.kernel.org/all/20250515041659.smhllyarxdwp7cav@desk/
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ kernel/bpf/verifier.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index db95b76f5c13..e7a92df1580c 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -3750,7 +3750,7 @@ static int push_insn_history(struct bpf_verifier_env *env, struct bpf_verifier_s
+ 
+ 	if (cur->insn_hist_end + 1 > env->insn_hist_cap) {
+ 		alloc_size = size_mul(cur->insn_hist_end + 1, sizeof(*p));
+-		p = kvrealloc(env->insn_hist, alloc_size, GFP_USER);
++		p = krealloc(env->insn_hist, alloc_size, GFP_USER);
+ 		if (!p)
+ 			return -ENOMEM;
+ 		env->insn_hist = p;
+-- 
+2.49.0
+
