@@ -49,7 +49,15 @@ jobs:
           rev: 'master'
           dest: '${{ github.workspace }}/.kernel'
 
-      - name: Patch kernel source
+      - name: Patch kernel source (specific)
+        uses: libbpf/ci/patch-kernel@v3
+        # Only run when the kernel-specific directory exists
+        if: hashFiles('ci/diffs/mainline/**') != ''
+        with:
+          patches-root: '${{ github.workspace }}/ci/diffs/mainline/'
+          repo-root: '.kernel'
+
+      - name: Patch kernel source (generic)
         uses: libbpf/ci/patch-kernel@v3
         with:
           patches-root: '${{ github.workspace }}/ci/diffs'
