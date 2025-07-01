@@ -1,0 +1,93 @@
+diff --git a/tools/testing/selftests/bpf/Makefile b/tools/testing/selftests/bpf/Makefile
+index eec1905..dcb2f84 100644
+--- a/tools/testing/selftests/bpf/Makefile
++++ b/tools/testing/selftests/bpf/Makefile
+@@ -170,14 +170,6 @@ VMLINUX_BTF ?= $(abspath $(firstword $(wildcard $(VMLINUX_BTF_PATHS))))
+ ifeq ($(VMLINUX_BTF),)
+ $(error Cannot find a vmlinux for VMLINUX_BTF at any of "$(VMLINUX_BTF_PATHS)")
+ endif
+-BTRFS_BTF_PATHS ?= $(if $(O),$(O)/fs/btrfs/btrfs.ko)				\
+-		     $(if $(KBUILD_OUTPUT),$(KBUILD_OUTPUT)/fs/btrfs/btrfs.ko)	\
+-		     ../../../../fs/btrfs/btrfs.ko				\
+-		     /sys/kernel/btf/btrfs
+-BTRFS_BTF ?= $(abspath $(firstword $(wildcard $(BTRFS_BTF_PATHS))))
+-ifeq ($(BTRFS_BTF),)
+-$(error Cannot find a btrfs.ko for BTRFS_BTF at any of "$(BTRFS_BTF_PATHS)")
+-endif
+ 
+ # Define simple and short `make test_progs`, `make test_sysctl`, etc targets
+ # to build individual tests.
+@@ -345,12 +337,7 @@ endif
+ $(INCLUDE_DIR)/vmlinux.h: $(VMLINUX_BTF) $(BPFTOOL) | $(INCLUDE_DIR)
+ ifeq ($(VMLINUX_H),)
+ 	$(call msg,GEN,,$@)
+-	# This is a lie, we're dumping BTF of the btrfs modules because we need
+-	# definition of btrfs-related definitions (see bsc#1198585). But since
+-	# the header file generated also contains vmlinux definiton (more
+-	# specifically, it is a superset of vmlinux definition), it can be used
+-	# in places where vmlinux.h is expected.
+-	$(Q)$(BPFTOOL) btf dump --base-btf $(VMLINUX_BTF) file $(BTRFS_BTF) format c > $@
++	$(Q)$(BPFTOOL) btf dump file $(VMLINUX_BTF) format c > $@
+ else
+ 	$(call msg,CP,,$@)
+ 	$(Q)cp "$(VMLINUX_H)" $@
+diff --git a/tools/testing/selftests/bpf/progs/bpf_iter_task_vma.c b/tools/testing/selftests/bpf/progs/bpf_iter_task_vma.c
+index b90757c..dd923dc 100644
+--- a/tools/testing/selftests/bpf/progs/bpf_iter_task_vma.c
++++ b/tools/testing/selftests/bpf/progs/bpf_iter_task_vma.c
+@@ -1,7 +1,6 @@
+ // SPDX-License-Identifier: GPL-2.0
+ /* Copyright (c) 2020 Facebook */
+ #include "bpf_iter.h"
+-#include <bpf/bpf_core_read.h>
+ #include <bpf/bpf_helpers.h>
+ 
+ char _license[] SEC("license") = "GPL";
+@@ -18,9 +17,6 @@ char _license[] SEC("license") = "GPL";
+ #define MAJOR(dev)	((unsigned int) ((dev) >> MINORBITS))
+ #define MINOR(dev)	((unsigned int) ((dev) & MINORMASK))
+ 
+-/* libbpf will fill-in the address of the symbol */
+-extern const void btrfs_super_ops __ksym;
+-
+ #define D_PATH_BUF_SIZE 1024
+ char d_path_buf[D_PATH_BUF_SIZE] = {};
+ __u32 pid = 0;
+@@ -51,14 +47,7 @@ SEC("iter/task_vma") int proc_maps(struct bpf_iter__task_vma *ctx)
+ 	BPF_SEQ_PRINTF(seq, "%08llx-%08llx %s ", vma->vm_start, vma->vm_end, perm_str);
+ 
+ 	if (file) {
+-		__u32 dev;
+-		if (file->f_inode->i_sb->s_op == &btrfs_super_ops) {
+-			/* BTRFS is treated specially, see bsc#1198585 */
+-			struct btrfs_inode *inode = container_of(file->f_inode, struct btrfs_inode, vfs_inode);
+-			dev = BPF_CORE_READ(inode, root, anon_dev);
+-		} else {
+-			dev = file->f_inode->i_sb->s_dev;
+-		}
++		__u32 dev = file->f_inode->i_sb->s_dev;
+ 
+ 		bpf_d_path(&file->f_path, d_path_buf, D_PATH_BUF_SIZE);
+ 
+diff --git a/tools/testing/selftests/bpf/progs/lsm_cgroup.c b/tools/testing/selftests/bpf/progs/lsm_cgroup.c
+index cae15d4..d759853 100644
+--- a/tools/testing/selftests/bpf/progs/lsm_cgroup.c
++++ b/tools/testing/selftests/bpf/progs/lsm_cgroup.c
+@@ -23,17 +23,6 @@ extern bool CONFIG_SECURITY_APPARMOR __kconfig __weak;
+ #define EPERM 1
+ #endif
+ 
+-/* We have CONFIG_PACKET=m, so socketaddr_ll won't be in vmlinux.h */
+-struct sockaddr_ll {
+-	unsigned short	sll_family;
+-	__be16		sll_protocol;
+-	int		sll_ifindex;
+-	unsigned short	sll_hatype;
+-	unsigned char	sll_pkttype;
+-	unsigned char	sll_halen;
+-	unsigned char	sll_addr[8];
+-};
+-
+ struct {
+ 	__uint(type, BPF_MAP_TYPE_CGROUP_STORAGE);
+ 	__type(key, __u64);
