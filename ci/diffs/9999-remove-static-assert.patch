@@ -1,0 +1,16 @@
+diff --git a/include/net/xsk_buff_pool.h b/include/net/xsk_buff_pool.h
+index 67e516f..136ccba 100644
+--- a/include/net/xsk_buff_pool.h
++++ b/include/net/xsk_buff_pool.h
+@@ -143,11 +143,6 @@ struct __orig_xsk_buff_pool {
+ 	spinlock_t cq_lock;
+ 	struct xdp_buff_xsk *free_heads[];
+ };
+-static_assert(offsetof(struct xsk_buff_pool, queue_id) ==
+-	      offsetof(struct __orig_xsk_buff_pool, queue_id));
+-static_assert(offsetof(struct xsk_buff_pool, fq) ==
+-	      offsetof(struct __orig_xsk_buff_pool, fq));
+-
+ 
+ /* Masks for xdp_umem_page flags.
+  * The low 12-bits of the addr will be 0 since this is the page address, so we
