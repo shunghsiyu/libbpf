@@ -19,7 +19,7 @@ jobs:
           - kernel: '6.6'
             runs_on: 'ubuntu-24.04'
             arch: 'x86_64'
-            llvm-version: '17'
+            llvm-version: '18'
             pahole: 'master'
     name: Stable Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
     uses: ./.github/workflows/vmtest-stable.yml
