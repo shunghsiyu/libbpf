@@ -1,12 +1,14 @@
-From 49c900aaabd40d3285d80e5c76a44680257376cd Mon Sep 17 00:00:00 2001
+From 0565847e937ea7244b3b4c322891fd526c9fbdc4 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Alexis=20Lothor=C3=A9=20=28eBPF=20Foundation=29?=
  <alexis.lothore@bootlin.com>
 Date: Wed, 9 Oct 2024 12:12:09 +0200
-Subject: [PATCH 05/14] selftests/bpf: check program redirect in
+Subject: [PATCH 06/17] selftests/bpf: check program redirect in
  xdp_cpumap_attach
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
+
+commit d124d984c8a2d677e1cea6740a01ccdd0371a38d upstream.
 
 xdp_cpumap_attach, in its current form, only checks that an xdp cpumap
 program can be executed, but not that it performs correctly the cpu

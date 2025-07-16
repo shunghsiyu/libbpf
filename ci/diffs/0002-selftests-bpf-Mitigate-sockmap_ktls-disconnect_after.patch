@@ -1,7 +1,7 @@
-From bb6bf5caba04a19765c7036b78f163a024e2931e Mon Sep 17 00:00:00 2001
+From 833bf5900e3258a7a97b4264d535dee328e3abfe Mon Sep 17 00:00:00 2001
 From: Ihor Solodrai <ihor.solodrai@linux.dev>
 Date: Wed, 16 Apr 2025 10:02:46 -0700
-Subject: [PATCH 02/14] selftests/bpf: Mitigate sockmap_ktls
+Subject: [PATCH 02/17] selftests/bpf: Mitigate sockmap_ktls
  disconnect_after_delete failure
 
 "sockmap_ktls disconnect_after_delete" test has been failing on BPF CI
@@ -24,7 +24,6 @@ Signed-off-by: Ihor Solodrai <ihor.solodrai@linux.dev>
 Signed-off-by: Andrii Nakryiko <andrii@kernel.org>
 Reviewed-by: Jiayuan Chen <jiayuan.chen@linux.dev>
 Link: https://lore.kernel.org/bpf/20250416170246.2438524-1-ihor.solodrai@linux.dev
-Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 ---
  tools/testing/selftests/bpf/prog_tests/sockmap_ktls.c | 1 -
  1 file changed, 1 deletion(-)

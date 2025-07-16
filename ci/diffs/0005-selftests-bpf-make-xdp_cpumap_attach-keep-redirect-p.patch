@@ -1,12 +1,14 @@
-From d8c8166dd1de3ae2fbdcb666ad788c726ebaea29 Mon Sep 17 00:00:00 2001
+From 3b729133b5c513ac849c7b4a4ca3d1cead6d8aa4 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Alexis=20Lothor=C3=A9=20=28eBPF=20Foundation=29?=
  <alexis.lothore@bootlin.com>
 Date: Wed, 9 Oct 2024 12:12:08 +0200
-Subject: [PATCH 04/14] selftests/bpf: make xdp_cpumap_attach keep redirect
+Subject: [PATCH 05/17] selftests/bpf: make xdp_cpumap_attach keep redirect
  prog attached
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
+
+commit d5fbcf46ee82574aee443423f3e4132d1154372b upstream.
 
 Current test only checks attach/detach on cpu map type program, and so
 does not check that it can be properly executed, neither that it
@@ -23,6 +25,7 @@ While at it, bring the following minor improvements:
 Signed-off-by: Alexis Lothoré (eBPF Foundation) <alexis.lothore@bootlin.com>
 Link: https://lore.kernel.org/r/20241009-convert_xdp_tests-v3-2-51cea913710c@bootlin.com
 Signed-off-by: Martin KaFai Lau <martin.lau@kernel.org>
+Stable-dep-of: c7f2188d68c1 ("selftests/bpf: Adjust data size to have ETH_HLEN")
 Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 ---
  .../bpf/prog_tests/xdp_cpumap_attach.c        | 41 +++++++++++++++----
