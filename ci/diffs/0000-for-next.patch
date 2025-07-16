@@ -1,0 +1,1125 @@
+diff --git a/include/linux/bpf_verifier.h b/include/linux/bpf_verifier.h
+index 032deb0..3e2db70 100644
+--- a/include/linux/bpf_verifier.h
++++ b/include/linux/bpf_verifier.h
+@@ -361,7 +361,11 @@ enum {
+ 	INSN_F_SPI_MASK = 0x3f, /* 6 bits */
+ 	INSN_F_SPI_SHIFT = 3, /* shifted 3 bits to the left */
+ 
+-	INSN_F_STACK_ACCESS = BIT(9), /* we need 10 bits total */
++	INSN_F_STACK_ACCESS = BIT(9),
++
++	INSN_F_DST_REG_STACK = BIT(10), /* dst_reg is PTR_TO_STACK */
++	INSN_F_SRC_REG_STACK = BIT(11), /* src_reg is PTR_TO_STACK */
++	/* total 12 bits are used now. */
+ };
+ 
+ static_assert(INSN_F_FRAMENO_MASK + 1 >= MAX_CALL_FRAMES);
+@@ -370,9 +374,9 @@ static_assert(INSN_F_SPI_MASK + 1 >= MAX_BPF_STACK / 8);
+ struct bpf_jmp_history_entry {
+ 	u32 idx;
+ 	/* insn idx can't be bigger than 1 million */
+-	u32 prev_idx : 22;
+-	/* special flags, e.g., whether insn is doing register stack spill/load */
+-	u32 flags : 10;
++	u32 prev_idx : 20;
++	/* special INSN_F_xxx flags */
++	u32 flags : 12;
+ 	/* additional registers that need precision tracking when this
+ 	 * jump is backtracked, vector of six 10-bit records
+ 	 */
+diff --git a/kernel/bpf/helpers.c b/kernel/bpf/helpers.c
+index a05aeb3..9173d10 100644
+--- a/kernel/bpf/helpers.c
++++ b/kernel/bpf/helpers.c
+@@ -129,7 +129,8 @@ const struct bpf_func_proto bpf_map_peek_elem_proto = {
+ 
+ BPF_CALL_3(bpf_map_lookup_percpu_elem, struct bpf_map *, map, void *, key, u32, cpu)
+ {
+-	WARN_ON_ONCE(!rcu_read_lock_held() && !rcu_read_lock_bh_held());
++	WARN_ON_ONCE(!rcu_read_lock_held() && !rcu_read_lock_trace_held() &&
++		     !rcu_read_lock_bh_held());
+ 	return (unsigned long) map->ops->map_lookup_percpu_elem(map, key, cpu);
+ }
+ 
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index b2b4842..09b82f4 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -4128,8 +4128,10 @@ static int backtrack_insn(struct bpf_verifier_env *env, int idx, int subseq_idx,
+ 			 * before it would be equally necessary to
+ 			 * propagate it to dreg.
+ 			 */
+-			bt_set_reg(bt, dreg);
+-			bt_set_reg(bt, sreg);
++			if (!hist || !(hist->flags & INSN_F_SRC_REG_STACK))
++				bt_set_reg(bt, sreg);
++			if (!hist || !(hist->flags & INSN_F_DST_REG_STACK))
++				bt_set_reg(bt, dreg);
+ 		} else if (BPF_SRC(insn->code) == BPF_K) {
+ 			 /* dreg <cond> K
+ 			  * Only dreg still needs precision before
+@@ -15489,6 +15491,7 @@ static int check_cond_jmp_op(struct bpf_verifier_env *env,
+ 	struct bpf_reg_state *eq_branch_regs;
+ 	struct linked_regs linked_regs = {};
+ 	u8 opcode = BPF_OP(insn->code);
++	int insn_flags = 0;
+ 	bool is_jmp32;
+ 	int pred = -1;
+ 	int err;
+@@ -15548,6 +15551,11 @@ static int check_cond_jmp_op(struct bpf_verifier_env *env,
+ 				insn->src_reg);
+ 			return -EACCES;
+ 		}
++
++		if (src_reg->type == PTR_TO_STACK)
++			insn_flags |= INSN_F_SRC_REG_STACK;
++		if (dst_reg->type == PTR_TO_STACK)
++			insn_flags |= INSN_F_DST_REG_STACK;
+ 	} else {
+ 		if (insn->src_reg != BPF_REG_0) {
+ 			verbose(env, "BPF_JMP/JMP32 uses reserved fields\n");
+@@ -15557,6 +15565,15 @@ static int check_cond_jmp_op(struct bpf_verifier_env *env,
+ 		memset(src_reg, 0, sizeof(*src_reg));
+ 		src_reg->type = SCALAR_VALUE;
+ 		__mark_reg_known(src_reg, insn->imm);
++
++		if (dst_reg->type == PTR_TO_STACK)
++			insn_flags |= INSN_F_DST_REG_STACK;
++	}
++
++	if (insn_flags) {
++		err = push_jmp_history(env, this_branch, insn_flags, 0);
++		if (err)
++			return err;
+ 	}
+ 
+ 	is_jmp32 = BPF_CLASS(insn->code) == BPF_JMP32;
+diff --git a/net/core/skmsg.c b/net/core/skmsg.c
+index f76cbf4..97f5239 100644
+--- a/net/core/skmsg.c
++++ b/net/core/skmsg.c
+@@ -529,16 +529,22 @@ static int sk_psock_skb_ingress_enqueue(struct sk_buff *skb,
+ 					u32 off, u32 len,
+ 					struct sk_psock *psock,
+ 					struct sock *sk,
+-					struct sk_msg *msg)
++					struct sk_msg *msg,
++					bool take_ref)
+ {
+ 	int num_sge, copied;
+ 
++	/* skb_to_sgvec will fail when the total number of fragments in
++	 * frag_list and frags exceeds MAX_MSG_FRAGS. For example, the
++	 * caller may aggregate multiple skbs.
++	 */
+ 	num_sge = skb_to_sgvec(skb, msg->sg.data, off, len);
+ 	if (num_sge < 0) {
+ 		/* skb linearize may fail with ENOMEM, but lets simply try again
+ 		 * later if this happens. Under memory pressure we don't want to
+ 		 * drop the skb. We need to linearize the skb so that the mapping
+ 		 * in skb_to_sgvec can not error.
++		 * Note that skb_linearize requires the skb not to be shared.
+ 		 */
+ 		if (skb_linearize(skb))
+ 			return -EAGAIN;
+@@ -555,7 +561,7 @@ static int sk_psock_skb_ingress_enqueue(struct sk_buff *skb,
+ 	msg->sg.start = 0;
+ 	msg->sg.size = copied;
+ 	msg->sg.end = num_sge;
+-	msg->skb = skb;
++	msg->skb = take_ref ? skb_get(skb) : skb;
+ 
+ 	sk_psock_queue_msg(psock, msg);
+ 	sk_psock_data_ready(sk, psock);
+@@ -563,7 +569,7 @@ static int sk_psock_skb_ingress_enqueue(struct sk_buff *skb,
+ }
+ 
+ static int sk_psock_skb_ingress_self(struct sk_psock *psock, struct sk_buff *skb,
+-				     u32 off, u32 len);
++				     u32 off, u32 len, bool take_ref);
+ 
+ static int sk_psock_skb_ingress(struct sk_psock *psock, struct sk_buff *skb,
+ 				u32 off, u32 len)
+@@ -577,7 +583,7 @@ static int sk_psock_skb_ingress(struct sk_psock *psock, struct sk_buff *skb,
+ 	 * correctly.
+ 	 */
+ 	if (unlikely(skb->sk == sk))
+-		return sk_psock_skb_ingress_self(psock, skb, off, len);
++		return sk_psock_skb_ingress_self(psock, skb, off, len, true);
+ 	msg = sk_psock_create_ingress_msg(sk, skb);
+ 	if (!msg)
+ 		return -EAGAIN;
+@@ -589,7 +595,7 @@ static int sk_psock_skb_ingress(struct sk_psock *psock, struct sk_buff *skb,
+ 	 * into user buffers.
+ 	 */
+ 	skb_set_owner_r(skb, sk);
+-	err = sk_psock_skb_ingress_enqueue(skb, off, len, psock, sk, msg);
++	err = sk_psock_skb_ingress_enqueue(skb, off, len, psock, sk, msg, true);
+ 	if (err < 0)
+ 		kfree(msg);
+ 	return err;
+@@ -600,7 +606,7 @@ static int sk_psock_skb_ingress(struct sk_psock *psock, struct sk_buff *skb,
+  * because the skb is already accounted for here.
+  */
+ static int sk_psock_skb_ingress_self(struct sk_psock *psock, struct sk_buff *skb,
+-				     u32 off, u32 len)
++				     u32 off, u32 len, bool take_ref)
+ {
+ 	struct sk_msg *msg = alloc_sk_msg(GFP_ATOMIC);
+ 	struct sock *sk = psock->sk;
+@@ -609,7 +615,7 @@ static int sk_psock_skb_ingress_self(struct sk_psock *psock, struct sk_buff *skb
+ 	if (unlikely(!msg))
+ 		return -EAGAIN;
+ 	skb_set_owner_r(skb, sk);
+-	err = sk_psock_skb_ingress_enqueue(skb, off, len, psock, sk, msg);
++	err = sk_psock_skb_ingress_enqueue(skb, off, len, psock, sk, msg, take_ref);
+ 	if (err < 0)
+ 		kfree(msg);
+ 	return err;
+@@ -618,18 +624,13 @@ static int sk_psock_skb_ingress_self(struct sk_psock *psock, struct sk_buff *skb
+ static int sk_psock_handle_skb(struct sk_psock *psock, struct sk_buff *skb,
+ 			       u32 off, u32 len, bool ingress)
+ {
+-	int err = 0;
+-
+ 	if (!ingress) {
+ 		if (!sock_writeable(psock->sk))
+ 			return -EAGAIN;
+ 		return skb_send_sock(psock->sk, skb, off, len);
+ 	}
+-	skb_get(skb);
+-	err = sk_psock_skb_ingress(psock, skb, off, len);
+-	if (err < 0)
+-		kfree_skb(skb);
+-	return err;
++
++	return sk_psock_skb_ingress(psock, skb, off, len);
+ }
+ 
+ static void sk_psock_skb_state(struct sk_psock *psock,
+@@ -654,12 +655,14 @@ static void sk_psock_backlog(struct work_struct *work)
+ 	bool ingress;
+ 	int ret;
+ 
++	/* Increment the psock refcnt to synchronize with close(fd) path in
++	 * sock_map_close(), ensuring we wait for backlog thread completion
++	 * before sk_socket freed. If refcnt increment fails, it indicates
++	 * sock_map_close() completed with sk_socket potentially already freed.
++	 */
++	if (!sk_psock_get(psock->sk))
++		return;
+ 	mutex_lock(&psock->work_mutex);
+-	if (unlikely(state->len)) {
+-		len = state->len;
+-		off = state->off;
+-	}
+-
+ 	while ((skb = skb_peek(&psock->ingress_skb))) {
+ 		len = skb->len;
+ 		off = 0;
+@@ -669,6 +672,13 @@ static void sk_psock_backlog(struct work_struct *work)
+ 			off = stm->offset;
+ 			len = stm->full_len;
+ 		}
++
++		/* Resume processing from previous partial state */
++		if (unlikely(state->len)) {
++			len = state->len;
++			off = state->off;
++		}
++
+ 		ingress = skb_bpf_ingress(skb);
+ 		skb_bpf_redirect_clear(skb);
+ 		do {
+@@ -679,7 +689,8 @@ static void sk_psock_backlog(struct work_struct *work)
+ 			if (ret <= 0) {
+ 				if (ret == -EAGAIN) {
+ 					sk_psock_skb_state(psock, state, len, off);
+-
++					/* Restore redir info we cleared before */
++					skb_bpf_set_redir(skb, psock->sk, ingress);
+ 					/* Delay slightly to prioritize any
+ 					 * other work that might be here.
+ 					 */
+@@ -696,11 +707,14 @@ static void sk_psock_backlog(struct work_struct *work)
+ 			len -= ret;
+ 		} while (len);
+ 
++		/* The entire skb sent, clear state */
++		sk_psock_skb_state(psock, state, 0, 0);
+ 		skb = skb_dequeue(&psock->ingress_skb);
+ 		kfree_skb(skb);
+ 	}
+ end:
+ 	mutex_unlock(&psock->work_mutex);
++	sk_psock_put(psock->sk, psock);
+ }
+ 
+ struct sk_psock *sk_psock_init(struct sock *sk, int node)
+@@ -1013,7 +1027,7 @@ static int sk_psock_verdict_apply(struct sk_psock *psock, struct sk_buff *skb,
+ 				off = stm->offset;
+ 				len = stm->full_len;
+ 			}
+-			err = sk_psock_skb_ingress_self(psock, skb, off, len);
++			err = sk_psock_skb_ingress_self(psock, skb, off, len, false);
+ 		}
+ 		if (err < 0) {
+ 			spin_lock_bh(&psock->ingress_lock);
+diff --git a/tools/testing/selftests/bpf/Makefile b/tools/testing/selftests/bpf/Makefile
+index e315e52..7885d8b 100644
+--- a/tools/testing/selftests/bpf/Makefile
++++ b/tools/testing/selftests/bpf/Makefile
+@@ -831,6 +831,7 @@ $(OUTPUT)/bench_local_storage_create.o: $(OUTPUT)/bench_local_storage_create.ske
+ $(OUTPUT)/bench_bpf_hashmap_lookup.o: $(OUTPUT)/bpf_hashmap_lookup.skel.h
+ $(OUTPUT)/bench_htab_mem.o: $(OUTPUT)/htab_mem_bench.skel.h
+ $(OUTPUT)/bench_bpf_crypto.o: $(OUTPUT)/crypto_bench.skel.h
++$(OUTPUT)/bench_sockmap.o: $(OUTPUT)/bench_sockmap_prog.skel.h
+ $(OUTPUT)/bench.o: bench.h testing_helpers.h $(BPFOBJ)
+ $(OUTPUT)/bench: LDLIBS += -lm
+ $(OUTPUT)/bench: $(OUTPUT)/bench.o \
+@@ -851,6 +852,7 @@ $(OUTPUT)/bench: $(OUTPUT)/bench.o \
+ 		 $(OUTPUT)/bench_local_storage_create.o \
+ 		 $(OUTPUT)/bench_htab_mem.o \
+ 		 $(OUTPUT)/bench_bpf_crypto.o \
++		 $(OUTPUT)/bench_sockmap.o \
+ 		 #
+ 	$(call msg,BINARY,,$@)
+ 	$(Q)$(CC) $(CFLAGS) $(LDFLAGS) $(filter %.a %.o,$^) $(LDLIBS) -o $@
+diff --git a/tools/testing/selftests/bpf/bench.c b/tools/testing/selftests/bpf/bench.c
+index 1bd403a..c80df9b 100644
+--- a/tools/testing/selftests/bpf/bench.c
++++ b/tools/testing/selftests/bpf/bench.c
+@@ -283,6 +283,7 @@ extern struct argp bench_local_storage_create_argp;
+ extern struct argp bench_htab_mem_argp;
+ extern struct argp bench_trigger_batch_argp;
+ extern struct argp bench_crypto_argp;
++extern struct argp bench_sockmap_argp;
+ 
+ static const struct argp_child bench_parsers[] = {
+ 	{ &bench_ringbufs_argp, 0, "Ring buffers benchmark", 0 },
+@@ -297,6 +298,7 @@ static const struct argp_child bench_parsers[] = {
+ 	{ &bench_htab_mem_argp, 0, "hash map memory benchmark", 0 },
+ 	{ &bench_trigger_batch_argp, 0, "BPF triggering benchmark", 0 },
+ 	{ &bench_crypto_argp, 0, "bpf crypto benchmark", 0 },
++	{ &bench_sockmap_argp, 0, "bpf sockmap benchmark", 0 },
+ 	{},
+ };
+ 
+@@ -549,6 +551,7 @@ extern const struct bench bench_local_storage_create;
+ extern const struct bench bench_htab_mem;
+ extern const struct bench bench_crypto_encrypt;
+ extern const struct bench bench_crypto_decrypt;
++extern const struct bench bench_sockmap;
+ 
+ static const struct bench *benchs[] = {
+ 	&bench_count_global,
+@@ -609,6 +612,7 @@ static const struct bench *benchs[] = {
+ 	&bench_htab_mem,
+ 	&bench_crypto_encrypt,
+ 	&bench_crypto_decrypt,
++	&bench_sockmap,
+ };
+ 
+ static void find_benchmark(void)
+diff --git a/tools/testing/selftests/bpf/benchs/bench_sockmap.c b/tools/testing/selftests/bpf/benchs/bench_sockmap.c
+new file mode 100644
+index 0000000..54f4e7c
+--- /dev/null
++++ b/tools/testing/selftests/bpf/benchs/bench_sockmap.c
+@@ -0,0 +1,599 @@
++// SPDX-License-Identifier: GPL-2.0
++
++#include <error.h>
++#include <sys/types.h>
++#include <sys/socket.h>
++#include <sys/types.h>
++#include <netinet/in.h>
++#include <sys/sendfile.h>
++#include <arpa/inet.h>
++#include <fcntl.h>
++#include <argp.h>
++#include "bench.h"
++#include "bench_sockmap_prog.skel.h"
++
++#define FILE_SIZE (128 * 1024)
++#define DATA_REPEAT_SIZE 10
++
++static const char snd_data[DATA_REPEAT_SIZE] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
++
++/* c1 <-> [p1, p2] <-> c2
++ * RX bench(BPF_SK_SKB_STREAM_VERDICT):
++ *	ARG_FW_RX_PASS:
++ *		send(p2) -> recv(c2) -> bpf skb passthrough -> recv(c2)
++ *	ARG_FW_RX_VERDICT_EGRESS:
++ *		send(c1) -> verdict skb to tx queuec of p2 -> recv(c2)
++ *	ARG_FW_RX_VERDICT_INGRESS:
++ *		send(c1) -> verdict skb to rx queuec of c2 -> recv(c2)
++ *
++ * TX bench(BPF_SK_MSG_VERDIC):
++ *	ARG_FW_TX_PASS:
++ *		send(p2) -> bpf msg passthrough -> send(p2) -> recv(c2)
++ *	ARG_FW_TX_VERDICT_INGRESS:
++ *		send(p2) -> verdict msg to rx queue of c2 -> recv(c2)
++ *	ARG_FW_TX_VERDICT_EGRESS:
++ *		send(p1) -> verdict msg to tx queue of p2 -> recv(c2)
++ */
++enum SOCKMAP_ARG_FLAG {
++	ARG_FW_RX_NORMAL = 11000,
++	ARG_FW_RX_PASS,
++	ARG_FW_RX_VERDICT_EGRESS,
++	ARG_FW_RX_VERDICT_INGRESS,
++	ARG_FW_TX_NORMAL,
++	ARG_FW_TX_PASS,
++	ARG_FW_TX_VERDICT_INGRESS,
++	ARG_FW_TX_VERDICT_EGRESS,
++	ARG_CTL_RX_STRP,
++	ARG_CONSUMER_DELAY_TIME,
++	ARG_PRODUCER_DURATION,
++};
++
++#define TXMODE_NORMAL()				\
++	((ctx.mode) == ARG_FW_TX_NORMAL)
++
++#define TXMODE_BPF_INGRESS()			\
++	((ctx.mode) == ARG_FW_TX_VERDICT_INGRESS)
++
++#define TXMODE_BPF_EGRESS()			\
++	((ctx.mode) == ARG_FW_TX_VERDICT_EGRESS)
++
++#define TXMODE_BPF_PASS()			\
++	((ctx.mode) == ARG_FW_TX_PASS)
++
++#define TXMODE_BPF() (				\
++	TXMODE_BPF_PASS() ||			\
++	TXMODE_BPF_INGRESS() ||			\
++	TXMODE_BPF_EGRESS())
++
++#define TXMODE() (				\
++	TXMODE_NORMAL() ||			\
++	TXMODE_BPF())
++
++#define RXMODE_NORMAL()				\
++	((ctx.mode) == ARG_FW_RX_NORMAL)
++
++#define RXMODE_BPF_PASS()			\
++	((ctx.mode) == ARG_FW_RX_PASS)
++
++#define RXMODE_BPF_VERDICT_EGRESS()		\
++	((ctx.mode) == ARG_FW_RX_VERDICT_EGRESS)
++
++#define RXMODE_BPF_VERDICT_INGRESS()		\
++	((ctx.mode) == ARG_FW_RX_VERDICT_INGRESS)
++
++#define RXMODE_BPF_VERDICT() (			\
++	RXMODE_BPF_VERDICT_INGRESS() ||		\
++	RXMODE_BPF_VERDICT_EGRESS())
++
++#define RXMODE_BPF() (				\
++	RXMODE_BPF_PASS() ||			\
++	RXMODE_BPF_VERDICT())
++
++#define RXMODE() (				\
++	RXMODE_NORMAL() ||			\
++	RXMODE_BPF())
++
++static struct socmap_ctx {
++	struct bench_sockmap_prog *skel;
++	enum SOCKMAP_ARG_FLAG mode;
++	#define c1	fds[0]
++	#define p1	fds[1]
++	#define c2	fds[2]
++	#define p2	fds[3]
++	#define sfd	fds[4]
++	int		fds[5];
++	long		send_calls;
++	long		read_calls;
++	long		prod_send;
++	long		user_read;
++	int		file_size;
++	int		delay_consumer;
++	int		prod_run_time;
++	int		strp_size;
++} ctx = {
++	.prod_send	= 0,
++	.user_read	= 0,
++	.file_size	= FILE_SIZE,
++	.mode		= ARG_FW_RX_VERDICT_EGRESS,
++	.fds		= {0},
++	.delay_consumer = 0,
++	.prod_run_time	= 0,
++	.strp_size	= 0,
++};
++
++static void bench_sockmap_prog_destroy(void)
++{
++	int i;
++
++	for (i = 0; i < sizeof(ctx.fds); i++) {
++		if (ctx.fds[0] > 0)
++			close(ctx.fds[i]);
++	}
++
++	bench_sockmap_prog__destroy(ctx.skel);
++}
++
++static void init_addr(struct sockaddr_storage *ss,
++		      socklen_t *len)
++{
++	struct sockaddr_in *addr4 = memset(ss, 0, sizeof(*ss));
++
++	addr4->sin_family = AF_INET;
++	addr4->sin_port = 0;
++	addr4->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
++	*len = sizeof(*addr4);
++}
++
++static bool set_non_block(int fd, bool blocking)
++{
++	int flags = fcntl(fd, F_GETFL, 0);
++
++	if (flags == -1)
++		return false;
++	flags = blocking ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK);
++	return (fcntl(fd, F_SETFL, flags) == 0);
++}
++
++static int create_pair(int *c, int *p, int type)
++{
++	struct sockaddr_storage addr;
++	int err, cfd, pfd;
++	socklen_t addr_len = sizeof(struct sockaddr_storage);
++
++	err = getsockname(ctx.sfd, (struct sockaddr *)&addr, &addr_len);
++	if (err) {
++		fprintf(stderr, "getsockname error %d\n", errno);
++		return err;
++	}
++	cfd = socket(AF_INET, type, 0);
++	if (cfd < 0) {
++		fprintf(stderr, "socket error %d\n", errno);
++		return err;
++	}
++
++	err = connect(cfd, (struct sockaddr *)&addr, addr_len);
++	if (err && errno != EINPROGRESS) {
++		fprintf(stderr, "connect error %d\n", errno);
++		return err;
++	}
++
++	pfd = accept(ctx.sfd, NULL, NULL);
++	if (pfd < 0) {
++		fprintf(stderr, "accept error %d\n", errno);
++		return err;
++	}
++	*c = cfd;
++	*p = pfd;
++	return 0;
++}
++
++static int create_sockets(void)
++{
++	struct sockaddr_storage addr;
++	int err, one = 1;
++	socklen_t addr_len;
++
++	init_addr(&addr, &addr_len);
++	ctx.sfd = socket(AF_INET, SOCK_STREAM, 0);
++	if (ctx.sfd < 0) {
++		fprintf(stderr, "socket error:%d\n", errno);
++		return ctx.sfd;
++	}
++	err = setsockopt(ctx.sfd, SOL_SOCKET, SO_REUSEPORT, &one, sizeof(one));
++	if (err) {
++		fprintf(stderr, "setsockopt error:%d\n", errno);
++		return err;
++	}
++
++	err = bind(ctx.sfd, (struct sockaddr *)&addr, addr_len);
++	if (err) {
++		fprintf(stderr, "bind error:%d\n", errno);
++		return err;
++	}
++
++	err = listen(ctx.sfd, SOMAXCONN);
++	if (err) {
++		fprintf(stderr, "listen error:%d\n", errno);
++		return err;
++	}
++
++	err = create_pair(&ctx.c1, &ctx.p1, SOCK_STREAM);
++	if (err) {
++		fprintf(stderr, "create_pair 1 error\n");
++		return err;
++	}
++
++	err = create_pair(&ctx.c2, &ctx.p2, SOCK_STREAM);
++	if (err) {
++		fprintf(stderr, "create_pair 2 error\n");
++		return err;
++	}
++	printf("create socket fd c1:%d p1:%d c2:%d p2:%d\n",
++	       ctx.c1, ctx.p1, ctx.c2, ctx.p2);
++	return 0;
++}
++
++static void validate(void)
++{
++	if (env.consumer_cnt != 2 || env.producer_cnt != 1 ||
++	    !env.affinity)
++		goto err;
++	return;
++err:
++	fprintf(stderr, "argument '-c 2 -p 1 -a' is necessary");
++	exit(1);
++}
++
++static int setup_rx_sockmap(void)
++{
++	int verdict, pass, parser, map;
++	int zero = 0, one = 1;
++	int err;
++
++	parser = bpf_program__fd(ctx.skel->progs.prog_skb_parser);
++	verdict = bpf_program__fd(ctx.skel->progs.prog_skb_verdict);
++	pass = bpf_program__fd(ctx.skel->progs.prog_skb_pass);
++	map = bpf_map__fd(ctx.skel->maps.sock_map_rx);
++
++	if (ctx.strp_size != 0) {
++		ctx.skel->bss->pkt_size = ctx.strp_size;
++		err = bpf_prog_attach(parser, map, BPF_SK_SKB_STREAM_PARSER, 0);
++		if (err)
++			return err;
++	}
++
++	if (RXMODE_BPF_VERDICT())
++		err = bpf_prog_attach(verdict, map, BPF_SK_SKB_STREAM_VERDICT, 0);
++	else if (RXMODE_BPF_PASS())
++		err = bpf_prog_attach(pass, map, BPF_SK_SKB_STREAM_VERDICT, 0);
++	if (err)
++		return err;
++
++	if (RXMODE_BPF_PASS())
++		return bpf_map_update_elem(map, &zero, &ctx.c2, BPF_NOEXIST);
++
++	err = bpf_map_update_elem(map, &zero, &ctx.p1, BPF_NOEXIST);
++	if (err < 0)
++		return err;
++
++	if (RXMODE_BPF_VERDICT_INGRESS()) {
++		ctx.skel->bss->verdict_dir = BPF_F_INGRESS;
++		err = bpf_map_update_elem(map, &one, &ctx.c2, BPF_NOEXIST);
++	} else {
++		err = bpf_map_update_elem(map, &one, &ctx.p2, BPF_NOEXIST);
++	}
++	if (err < 0)
++		return err;
++
++	return 0;
++}
++
++static int setup_tx_sockmap(void)
++{
++	int zero = 0, one = 1;
++	int prog, map;
++	int err;
++
++	map = bpf_map__fd(ctx.skel->maps.sock_map_tx);
++	prog = TXMODE_BPF_PASS() ?
++		bpf_program__fd(ctx.skel->progs.prog_skmsg_pass) :
++		bpf_program__fd(ctx.skel->progs.prog_skmsg_verdict);
++
++	err = bpf_prog_attach(prog, map, BPF_SK_MSG_VERDICT, 0);
++	if (err)
++		return err;
++
++	if (TXMODE_BPF_EGRESS()) {
++		err = bpf_map_update_elem(map, &zero, &ctx.p1, BPF_NOEXIST);
++		err |= bpf_map_update_elem(map, &one, &ctx.p2, BPF_NOEXIST);
++	} else {
++		ctx.skel->bss->verdict_dir = BPF_F_INGRESS;
++		err = bpf_map_update_elem(map, &zero, &ctx.p2, BPF_NOEXIST);
++		err |= bpf_map_update_elem(map, &one, &ctx.c2, BPF_NOEXIST);
++	}
++
++	if (err < 0)
++		return err;
++
++	return 0;
++}
++
++static void setup(void)
++{
++	int err;
++
++	ctx.skel = bench_sockmap_prog__open_and_load();
++	if (!ctx.skel) {
++		fprintf(stderr, "error loading skel\n");
++		exit(1);
++	}
++
++	if (create_sockets()) {
++		fprintf(stderr, "create_net_mode error\n");
++		goto err;
++	}
++
++	if (RXMODE_BPF()) {
++		err = setup_rx_sockmap();
++		if (err) {
++			fprintf(stderr, "setup_rx_sockmap error:%d\n", err);
++			goto err;
++		}
++	} else if (TXMODE_BPF()) {
++		err = setup_tx_sockmap();
++		if (err) {
++			fprintf(stderr, "setup_tx_sockmap error:%d\n", err);
++			goto err;
++		}
++	} else {
++		fprintf(stderr, "unknown sockmap bench mode: %d\n", ctx.mode);
++		goto err;
++	}
++
++	return;
++
++err:
++	bench_sockmap_prog_destroy();
++	exit(1);
++}
++
++static void measure(struct bench_res *res)
++{
++	res->drops = atomic_swap(&ctx.prod_send, 0);
++	res->hits = atomic_swap(&ctx.skel->bss->process_byte, 0);
++	res->false_hits = atomic_swap(&ctx.user_read, 0);
++	res->important_hits = atomic_swap(&ctx.send_calls, 0);
++	res->important_hits |= atomic_swap(&ctx.read_calls, 0) << 32;
++}
++
++static void verify_data(int *check_pos, char *buf, int rcv)
++{
++	for (int i = 0 ; i < rcv; i++) {
++		if (buf[i] != snd_data[(*check_pos) % DATA_REPEAT_SIZE]) {
++			fprintf(stderr, "verify data fail");
++			exit(1);
++		}
++		(*check_pos)++;
++		if (*check_pos >= FILE_SIZE)
++			*check_pos = 0;
++	}
++}
++
++static void *consumer(void *input)
++{
++	int rcv, sent;
++	int check_pos = 0;
++	int tid = (long)input;
++	int recv_buf_size = FILE_SIZE;
++	char *buf = malloc(recv_buf_size);
++	int delay_read = ctx.delay_consumer;
++
++	if (!buf) {
++		fprintf(stderr, "fail to init read buffer");
++		return NULL;
++	}
++
++	while (true) {
++		if (tid == 1) {
++			/* consumer 1 is unused for tx test and stream verdict test */
++			if (RXMODE_BPF() || TXMODE())
++				return NULL;
++			/* it's only for RX_NORMAL which service as reserve-proxy mode */
++			rcv = read(ctx.p1, buf, recv_buf_size);
++			if (rcv < 0) {
++				fprintf(stderr, "fail to read p1");
++				return NULL;
++			}
++
++			sent = send(ctx.p2, buf, recv_buf_size, 0);
++			if (sent < 0) {
++				fprintf(stderr, "fail to send p2");
++				return NULL;
++			}
++		} else {
++			if (delay_read != 0) {
++				if (delay_read < 0)
++					return NULL;
++				sleep(delay_read);
++				delay_read = 0;
++			}
++			/* read real endpoint by consumer 0 */
++			atomic_inc(&ctx.read_calls);
++			rcv = read(ctx.c2, buf, recv_buf_size);
++			if (rcv < 0 && errno != EAGAIN) {
++				fprintf(stderr, "%s fail to read c2 %d\n", __func__, errno);
++				return NULL;
++			}
++			verify_data(&check_pos, buf, rcv);
++			atomic_add(&ctx.user_read, rcv);
++		}
++	}
++
++	return NULL;
++}
++
++static void *producer(void *input)
++{
++	int off = 0, fp, need_sent, sent;
++	int file_size = ctx.file_size;
++	struct timespec ts1, ts2;
++	int target;
++	FILE *file;
++
++	file = tmpfile();
++	if (!file) {
++		fprintf(stderr, "create file for sendfile");
++		return NULL;
++	}
++
++	/* we need simple verify */
++	for (int i = 0; i < file_size; i++) {
++		if (fwrite(&snd_data[off], sizeof(char), 1, file) != 1) {
++			fprintf(stderr, "init tmpfile error");
++			return NULL;
++		}
++		if (++off >= sizeof(snd_data))
++			off = 0;
++	}
++	fflush(file);
++	fseek(file, 0, SEEK_SET);
++
++	fp = fileno(file);
++	need_sent = file_size;
++	clock_gettime(CLOCK_MONOTONIC, &ts1);
++
++	if (RXMODE_BPF_VERDICT())
++		target = ctx.c1;
++	else if (TXMODE_BPF_EGRESS())
++		target = ctx.p1;
++	else
++		target = ctx.p2;
++	set_non_block(target, true);
++	while (true) {
++		if (ctx.prod_run_time) {
++			clock_gettime(CLOCK_MONOTONIC, &ts2);
++			if (ts2.tv_sec - ts1.tv_sec > ctx.prod_run_time)
++				return NULL;
++		}
++
++		errno = 0;
++		atomic_inc(&ctx.send_calls);
++		sent = sendfile(target, fp, NULL, need_sent);
++		if (sent < 0) {
++			if (errno != EAGAIN && errno != ENOMEM && errno != ENOBUFS) {
++				fprintf(stderr, "sendfile return %d, errorno %d:%s\n",
++					sent, errno, strerror(errno));
++				return NULL;
++			}
++			continue;
++		} else if (sent < need_sent) {
++			need_sent -= sent;
++			atomic_add(&ctx.prod_send, sent);
++			continue;
++		}
++		atomic_add(&ctx.prod_send, need_sent);
++		need_sent = file_size;
++		lseek(fp, 0, SEEK_SET);
++	}
++
++	return NULL;
++}
++
++static void report_progress(int iter, struct bench_res *res, long delta_ns)
++{
++	double speed_mbs, prod_mbs, bpf_mbs, send_hz, read_hz;
++
++	prod_mbs = res->drops / 1000000.0 / (delta_ns / 1000000000.0);
++	speed_mbs = res->false_hits / 1000000.0 / (delta_ns / 1000000000.0);
++	bpf_mbs = res->hits / 1000000.0 / (delta_ns / 1000000000.0);
++	send_hz = (res->important_hits & 0xFFFFFFFF) / (delta_ns / 1000000000.0);
++	read_hz = (res->important_hits >> 32) / (delta_ns / 1000000000.0);
++
++	printf("Iter %3d (%7.3lfus): ",
++	       iter, (delta_ns - 1000000000) / 1000.0);
++	printf("Send Speed %8.3lf MB/s (%8.3lf calls/s), BPF Speed %8.3lf MB/s, "
++	       "Rcv Speed %8.3lf MB/s (%8.3lf calls/s)\n",
++	       prod_mbs, send_hz, bpf_mbs, speed_mbs, read_hz);
++}
++
++static void report_final(struct bench_res res[], int res_cnt)
++{
++	double verdict_mbs_mean = 0.0;
++	long verdict_total = 0;
++	int i;
++
++	for (i = 0; i < res_cnt; i++) {
++		verdict_mbs_mean += res[i].hits / 1000000.0 / (0.0 + res_cnt);
++		verdict_total += res[i].hits / 1000000.0;
++	}
++
++	printf("Summary: total trans %8.3lu MB \u00B1 %5.3lf MB/s\n",
++	       verdict_total, verdict_mbs_mean);
++}
++
++static const struct argp_option opts[] = {
++	{ "rx-normal", ARG_FW_RX_NORMAL, NULL, 0,
++		"simple reserve-proxy mode, no bfp enabled"},
++	{ "rx-pass", ARG_FW_RX_PASS, NULL, 0,
++		"run bpf prog but no redir applied"},
++	{ "rx-strp", ARG_CTL_RX_STRP, "Byte", 0,
++		"enable strparser and set the encapsulation size"},
++	{ "rx-verdict-egress", ARG_FW_RX_VERDICT_EGRESS, NULL, 0,
++		"forward data with bpf(stream verdict)"},
++	{ "rx-verdict-ingress", ARG_FW_RX_VERDICT_INGRESS, NULL, 0,
++		"forward data with bpf(stream verdict)"},
++	{ "tx-normal", ARG_FW_TX_NORMAL, NULL, 0,
++		"simple c-s mode, no bfp enabled"},
++	{ "tx-pass", ARG_FW_TX_PASS, NULL, 0,
++		"run bpf prog but no redir applied"},
++	{ "tx-verdict-ingress", ARG_FW_TX_VERDICT_INGRESS, NULL, 0,
++		"forward msg to ingress queue of another socket"},
++	{ "tx-verdict-egress", ARG_FW_TX_VERDICT_EGRESS, NULL, 0,
++		"forward msg to egress queue of another socket"},
++	{ "delay-consumer", ARG_CONSUMER_DELAY_TIME, "SEC", 0,
++		"delay consumer start"},
++	{ "producer-duration", ARG_PRODUCER_DURATION, "SEC", 0,
++		"producer duration"},
++	{},
++};
++
++static error_t parse_arg(int key, char *arg, struct argp_state *state)
++{
++	switch (key) {
++	case ARG_FW_RX_NORMAL...ARG_FW_TX_VERDICT_EGRESS:
++		ctx.mode = key;
++		break;
++	case ARG_CONSUMER_DELAY_TIME:
++		ctx.delay_consumer = strtol(arg, NULL, 10);
++		break;
++	case ARG_PRODUCER_DURATION:
++		ctx.prod_run_time = strtol(arg, NULL, 10);
++		break;
++	case ARG_CTL_RX_STRP:
++		ctx.strp_size = strtol(arg, NULL, 10);
++		break;
++	default:
++		return ARGP_ERR_UNKNOWN;
++	}
++
++	return 0;
++}
++
++/* exported into benchmark runner */
++const struct argp bench_sockmap_argp = {
++	.options	= opts,
++	.parser		= parse_arg,
++};
++
++/* Benchmark performance of creating bpf local storage  */
++const struct bench bench_sockmap = {
++	.name			= "sockmap",
++	.argp			= &bench_sockmap_argp,
++	.validate		= validate,
++	.setup			= setup,
++	.producer_thread	= producer,
++	.consumer_thread	= consumer,
++	.measure		= measure,
++	.report_progress	= report_progress,
++	.report_final		= report_final,
++};
+diff --git a/tools/testing/selftests/bpf/prog_tests/token.c b/tools/testing/selftests/bpf/prog_tests/token.c
+index fe86e4f..c3ab9b6 100644
+--- a/tools/testing/selftests/bpf/prog_tests/token.c
++++ b/tools/testing/selftests/bpf/prog_tests/token.c
+@@ -828,8 +828,12 @@ static int userns_obj_priv_btf_success(int mnt_fd, struct token_lsm *lsm_skel)
+ 	return validate_struct_ops_load(mnt_fd, true /* should succeed */);
+ }
+ 
++static const char *token_bpffs_custom_dir()
++{
++	return getenv("BPF_SELFTESTS_BPF_TOKEN_DIR") ?: "/tmp/bpf-token-fs";
++}
++
+ #define TOKEN_ENVVAR "LIBBPF_BPF_TOKEN_PATH"
+-#define TOKEN_BPFFS_CUSTOM "/bpf-token-fs"
+ 
+ static int userns_obj_priv_implicit_token(int mnt_fd, struct token_lsm *lsm_skel)
+ {
+@@ -892,6 +896,7 @@ static int userns_obj_priv_implicit_token(int mnt_fd, struct token_lsm *lsm_skel
+ 
+ static int userns_obj_priv_implicit_token_envvar(int mnt_fd, struct token_lsm *lsm_skel)
+ {
++	const char *custom_dir = token_bpffs_custom_dir();
+ 	LIBBPF_OPTS(bpf_object_open_opts, opts);
+ 	struct dummy_st_ops_success *skel;
+ 	int err;
+@@ -909,10 +914,10 @@ static int userns_obj_priv_implicit_token_envvar(int mnt_fd, struct token_lsm *l
+ 	 * BPF token implicitly, unless pointed to it through
+ 	 * LIBBPF_BPF_TOKEN_PATH envvar
+ 	 */
+-	rmdir(TOKEN_BPFFS_CUSTOM);
+-	if (!ASSERT_OK(mkdir(TOKEN_BPFFS_CUSTOM, 0777), "mkdir_bpffs_custom"))
++	rmdir(custom_dir);
++	if (!ASSERT_OK(mkdir(custom_dir, 0777), "mkdir_bpffs_custom"))
+ 		goto err_out;
+-	err = sys_move_mount(mnt_fd, "", AT_FDCWD, TOKEN_BPFFS_CUSTOM, MOVE_MOUNT_F_EMPTY_PATH);
++	err = sys_move_mount(mnt_fd, "", AT_FDCWD, custom_dir, MOVE_MOUNT_F_EMPTY_PATH);
+ 	if (!ASSERT_OK(err, "move_mount_bpffs"))
+ 		goto err_out;
+ 
+@@ -925,7 +930,7 @@ static int userns_obj_priv_implicit_token_envvar(int mnt_fd, struct token_lsm *l
+ 		goto err_out;
+ 	}
+ 
+-	err = setenv(TOKEN_ENVVAR, TOKEN_BPFFS_CUSTOM, 1 /*overwrite*/);
++	err = setenv(TOKEN_ENVVAR, custom_dir, 1 /*overwrite*/);
+ 	if (!ASSERT_OK(err, "setenv_token_path"))
+ 		goto err_out;
+ 
+@@ -951,11 +956,11 @@ static int userns_obj_priv_implicit_token_envvar(int mnt_fd, struct token_lsm *l
+ 	if (!ASSERT_ERR(err, "obj_empty_token_path_load"))
+ 		goto err_out;
+ 
+-	rmdir(TOKEN_BPFFS_CUSTOM);
++	rmdir(custom_dir);
+ 	unsetenv(TOKEN_ENVVAR);
+ 	return 0;
+ err_out:
+-	rmdir(TOKEN_BPFFS_CUSTOM);
++	rmdir(custom_dir);
+ 	unsetenv(TOKEN_ENVVAR);
+ 	return -EINVAL;
+ }
+diff --git a/tools/testing/selftests/bpf/progs/bench_sockmap_prog.c b/tools/testing/selftests/bpf/progs/bench_sockmap_prog.c
+new file mode 100644
+index 0000000..079bf37
+--- /dev/null
++++ b/tools/testing/selftests/bpf/progs/bench_sockmap_prog.c
+@@ -0,0 +1,65 @@
++// SPDX-License-Identifier: GPL-2.0
++#include <linux/bpf.h>
++#include <bpf/bpf_helpers.h>
++#include <bpf/bpf_endian.h>
++
++long process_byte = 0;
++int  verdict_dir = 0;
++int  dropped = 0;
++int  pkt_size = 0;
++struct {
++	__uint(type, BPF_MAP_TYPE_SOCKMAP);
++	__uint(max_entries, 20);
++	__type(key, int);
++	__type(value, int);
++} sock_map_rx SEC(".maps");
++
++struct {
++	__uint(type, BPF_MAP_TYPE_SOCKMAP);
++	__uint(max_entries, 20);
++	__type(key, int);
++	__type(value, int);
++} sock_map_tx SEC(".maps");
++
++SEC("sk_skb/stream_parser")
++int prog_skb_parser(struct __sk_buff *skb)
++{
++	return pkt_size;
++}
++
++SEC("sk_skb/stream_verdict")
++int prog_skb_verdict(struct __sk_buff *skb)
++{
++	int one = 1;
++	int ret =  bpf_sk_redirect_map(skb, &sock_map_rx, one, verdict_dir);
++
++	if (ret == SK_DROP)
++		dropped++;
++	__sync_fetch_and_add(&process_byte, skb->len);
++	return ret;
++}
++
++SEC("sk_skb/stream_verdict")
++int prog_skb_pass(struct __sk_buff *skb)
++{
++	__sync_fetch_and_add(&process_byte, skb->len);
++	return SK_PASS;
++}
++
++SEC("sk_msg")
++int prog_skmsg_verdict(struct sk_msg_md *msg)
++{
++	int one = 1;
++
++	__sync_fetch_and_add(&process_byte, msg->size);
++	return bpf_msg_redirect_map(msg, &sock_map_tx, one, verdict_dir);
++}
++
++SEC("sk_msg")
++int prog_skmsg_pass(struct sk_msg_md *msg)
++{
++	__sync_fetch_and_add(&process_byte, msg->size);
++	return SK_PASS;
++}
++
++char _license[] SEC("license") = "GPL";
+diff --git a/tools/testing/selftests/bpf/progs/verifier_precision.c b/tools/testing/selftests/bpf/progs/verifier_precision.c
+index 6b564d4..051d196 100644
+--- a/tools/testing/selftests/bpf/progs/verifier_precision.c
++++ b/tools/testing/selftests/bpf/progs/verifier_precision.c
+@@ -130,4 +130,57 @@ __naked int state_loop_first_last_equal(void)
+ 	);
+ }
+ 
++__used __naked static void __bpf_cond_op_r10(void)
++{
++	asm volatile (
++	"r2 = 2314885393468386424 ll;"
++	"goto +0;"
++	"if r2 <= r10 goto +3;"
++	"if r1 >= -1835016 goto +0;"
++	"if r2 <= 8 goto +0;"
++	"if r3 <= 0 goto +0;"
++	"exit;"
++	::: __clobber_all);
++}
++
++SEC("?raw_tp")
++__success __log_level(2)
++__msg("8: (bd) if r2 <= r10 goto pc+3")
++__msg("9: (35) if r1 >= 0xffe3fff8 goto pc+0")
++__msg("10: (b5) if r2 <= 0x8 goto pc+0")
++__msg("mark_precise: frame1: last_idx 10 first_idx 0 subseq_idx -1")
++__msg("mark_precise: frame1: regs=r2 stack= before 9: (35) if r1 >= 0xffe3fff8 goto pc+0")
++__msg("mark_precise: frame1: regs=r2 stack= before 8: (bd) if r2 <= r10 goto pc+3")
++__msg("mark_precise: frame1: regs=r2 stack= before 7: (05) goto pc+0")
++__naked void bpf_cond_op_r10(void)
++{
++	asm volatile (
++	"r3 = 0 ll;"
++	"call __bpf_cond_op_r10;"
++	"r0 = 0;"
++	"exit;"
++	::: __clobber_all);
++}
++
++SEC("?raw_tp")
++__success __log_level(2)
++__msg("3: (bf) r3 = r10")
++__msg("4: (bd) if r3 <= r2 goto pc+1")
++__msg("5: (b5) if r2 <= 0x8 goto pc+2")
++__msg("mark_precise: frame0: last_idx 5 first_idx 0 subseq_idx -1")
++__msg("mark_precise: frame0: regs=r2 stack= before 4: (bd) if r3 <= r2 goto pc+1")
++__msg("mark_precise: frame0: regs=r2 stack= before 3: (bf) r3 = r10")
++__naked void bpf_cond_op_not_r10(void)
++{
++	asm volatile (
++	"r0 = 0;"
++	"r2 = 2314885393468386424 ll;"
++	"r3 = r10;"
++	"if r3 <= r2 goto +1;"
++	"if r2 <= 8 goto +2;"
++	"r0 = 2 ll;"
++	"exit;"
++	::: __clobber_all);
++}
++
+ char _license[] SEC("license") = "GPL";
