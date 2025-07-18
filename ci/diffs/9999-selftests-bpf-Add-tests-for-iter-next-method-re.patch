@@ -1,0 +1,159 @@
+diff --git a/tools/testing/selftests/bpf/bpf_testmod/bpf_testmod.c b/tools/testing/selftests/bpf/bpf_testmod/bpf_testmod.c
+index 2d9078b..516f9e0 100644
+--- a/tools/testing/selftests/bpf/bpf_testmod/bpf_testmod.c
++++ b/tools/testing/selftests/bpf/bpf_testmod/bpf_testmod.c
+@@ -493,22 +493,10 @@ __bpf_kfunc static u32 bpf_kfunc_call_test_static_unused_arg(u32 arg, u32 unused
+ 	return arg;
+ }
+ 
+-__bpf_kfunc void bpf_kfunc_trusted_vma_test(struct vm_area_struct *ptr)
+-{
+-}
+-
+-__bpf_kfunc void bpf_kfunc_trusted_task_test(struct task_struct *ptr)
+-{
+-}
+-
+ __bpf_kfunc void bpf_kfunc_trusted_num_test(int *ptr)
+ {
+ }
+ 
+-__bpf_kfunc void bpf_kfunc_rcu_task_test(struct task_struct *ptr)
+-{
+-}
+-
+ BTF_SET8_START(bpf_testmod_check_kfunc_ids)
+ BTF_ID_FLAGS(func, bpf_testmod_test_mod_kfunc)
+ BTF_ID_FLAGS(func, bpf_kfunc_call_test1)
+@@ -535,10 +523,7 @@ BTF_ID_FLAGS(func, bpf_kfunc_call_test_ref, KF_TRUSTED_ARGS | KF_RCU)
+ BTF_ID_FLAGS(func, bpf_kfunc_call_test_destructive, KF_DESTRUCTIVE)
+ BTF_ID_FLAGS(func, bpf_kfunc_call_test_static_unused_arg)
+ BTF_ID_FLAGS(func, bpf_kfunc_call_test_offset)
+-BTF_ID_FLAGS(func, bpf_kfunc_trusted_vma_test, KF_TRUSTED_ARGS)
+-BTF_ID_FLAGS(func, bpf_kfunc_trusted_task_test, KF_TRUSTED_ARGS)
+ BTF_ID_FLAGS(func, bpf_kfunc_trusted_num_test, KF_TRUSTED_ARGS)
+-BTF_ID_FLAGS(func, bpf_kfunc_rcu_task_test, KF_RCU)
+ BTF_SET8_END(bpf_testmod_check_kfunc_ids)
+ 
+ static const struct btf_kfunc_id_set bpf_testmod_kfunc_set = {
+diff --git a/tools/testing/selftests/bpf/bpf_testmod/bpf_testmod_kfunc.h b/tools/testing/selftests/bpf/bpf_testmod/bpf_testmod_kfunc.h
+index 24d0ab1..f4a2072 100644
+--- a/tools/testing/selftests/bpf/bpf_testmod/bpf_testmod_kfunc.h
++++ b/tools/testing/selftests/bpf/bpf_testmod/bpf_testmod_kfunc.h
+@@ -105,9 +105,6 @@ void bpf_kfunc_call_test_fail2(struct prog_test_fail2 *p);
+ void bpf_kfunc_call_test_fail3(struct prog_test_fail3 *p);
+ void bpf_kfunc_call_test_mem_len_fail1(void *mem, int len);
+ 
+-void bpf_kfunc_trusted_vma_test(struct vm_area_struct *ptr) __ksym;
+-void bpf_kfunc_trusted_task_test(struct task_struct *ptr) __ksym;
+ void bpf_kfunc_trusted_num_test(int *ptr) __ksym;
+-void bpf_kfunc_rcu_task_test(struct task_struct *ptr) __ksym;
+ 
+ #endif /* _BPF_TESTMOD_KFUNC_H */
+diff --git a/tools/testing/selftests/bpf/progs/iters_testmod.c b/tools/testing/selftests/bpf/progs/iters_testmod.c
+index df1d3db..bc5de00 100644
+--- a/tools/testing/selftests/bpf/progs/iters_testmod.c
++++ b/tools/testing/selftests/bpf/progs/iters_testmod.c
+@@ -8,102 +8,6 @@
+ 
+ char _license[] SEC("license") = "GPL";
+ 
+-SEC("raw_tp/sys_enter")
+-__success
+-int iter_next_trusted(const void *ctx)
+-{
+-	struct task_struct *cur_task = bpf_get_current_task_btf();
+-	struct bpf_iter_task_vma vma_it;
+-	struct vm_area_struct *vma_ptr;
+-
+-	bpf_iter_task_vma_new(&vma_it, cur_task, 0);
+-
+-	vma_ptr = bpf_iter_task_vma_next(&vma_it);
+-	if (vma_ptr == NULL)
+-		goto out;
+-
+-	bpf_kfunc_trusted_vma_test(vma_ptr);
+-out:
+-	bpf_iter_task_vma_destroy(&vma_it);
+-	return 0;
+-}
+-
+-SEC("raw_tp/sys_enter")
+-__failure __msg("Possibly NULL pointer passed to trusted arg0")
+-int iter_next_trusted_or_null(const void *ctx)
+-{
+-	struct task_struct *cur_task = bpf_get_current_task_btf();
+-	struct bpf_iter_task_vma vma_it;
+-	struct vm_area_struct *vma_ptr;
+-
+-	bpf_iter_task_vma_new(&vma_it, cur_task, 0);
+-
+-	vma_ptr = bpf_iter_task_vma_next(&vma_it);
+-
+-	bpf_kfunc_trusted_vma_test(vma_ptr);
+-
+-	bpf_iter_task_vma_destroy(&vma_it);
+-	return 0;
+-}
+-
+-SEC("raw_tp/sys_enter")
+-__success
+-int iter_next_rcu(const void *ctx)
+-{
+-	struct task_struct *cur_task = bpf_get_current_task_btf();
+-	struct bpf_iter_task task_it;
+-	struct task_struct *task_ptr;
+-
+-	bpf_iter_task_new(&task_it, cur_task, 0);
+-
+-	task_ptr = bpf_iter_task_next(&task_it);
+-	if (task_ptr == NULL)
+-		goto out;
+-
+-	bpf_kfunc_rcu_task_test(task_ptr);
+-out:
+-	bpf_iter_task_destroy(&task_it);
+-	return 0;
+-}
+-
+-SEC("raw_tp/sys_enter")
+-__failure __msg("Possibly NULL pointer passed to trusted arg0")
+-int iter_next_rcu_or_null(const void *ctx)
+-{
+-	struct task_struct *cur_task = bpf_get_current_task_btf();
+-	struct bpf_iter_task task_it;
+-	struct task_struct *task_ptr;
+-
+-	bpf_iter_task_new(&task_it, cur_task, 0);
+-
+-	task_ptr = bpf_iter_task_next(&task_it);
+-
+-	bpf_kfunc_rcu_task_test(task_ptr);
+-
+-	bpf_iter_task_destroy(&task_it);
+-	return 0;
+-}
+-
+-SEC("raw_tp/sys_enter")
+-__failure __msg("R1 must be referenced or trusted")
+-int iter_next_rcu_not_trusted(const void *ctx)
+-{
+-	struct task_struct *cur_task = bpf_get_current_task_btf();
+-	struct bpf_iter_task task_it;
+-	struct task_struct *task_ptr;
+-
+-	bpf_iter_task_new(&task_it, cur_task, 0);
+-
+-	task_ptr = bpf_iter_task_next(&task_it);
+-	if (task_ptr == NULL)
+-		goto out;
+-
+-	bpf_kfunc_trusted_task_test(task_ptr);
+-out:
+-	bpf_iter_task_destroy(&task_it);
+-	return 0;
+-}
+-
+ SEC("raw_tp/sys_enter")
+ __failure __msg("R1 cannot write into rdonly_mem")
+ /* Message should not be 'R1 cannot write into rdonly_trusted_mem' */
