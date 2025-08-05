@@ -1,0 +1,960 @@
+diff --git a/Documentation/bpf/bpf_iterators.rst b/Documentation/bpf/bpf_iterators.rst
+index 0743391..7f514cb 100644
+--- a/Documentation/bpf/bpf_iterators.rst
++++ b/Documentation/bpf/bpf_iterators.rst
+@@ -86,7 +86,7 @@ following steps:
+ The following are a few examples of selftest BPF iterator programs:
+ 
+ * `bpf_iter_tcp4.c <https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git/tree/tools/testing/selftests/bpf/progs/bpf_iter_tcp4.c>`_
+-* `bpf_iter_task_vma.c <https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git/tree/tools/testing/selftests/bpf/progs/bpf_iter_task_vma.c>`_
++* `bpf_iter_task_vmas.c <https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git/tree/tools/testing/selftests/bpf/progs/bpf_iter_task_vmas.c>`_
+ * `bpf_iter_task_file.c <https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git/tree/tools/testing/selftests/bpf/progs/bpf_iter_task_file.c>`_
+ 
+ Let us look at ``bpf_iter_task_file.c``, which runs in kernel space:
+diff --git a/Documentation/bpf/map_hash.rst b/Documentation/bpf/map_hash.rst
+index d234395..8606bf9 100644
+--- a/Documentation/bpf/map_hash.rst
++++ b/Documentation/bpf/map_hash.rst
+@@ -233,10 +233,16 @@ attempts in order to enforce the LRU property which have increasing impacts on
+ other CPUs involved in the following operation attempts:
+ 
+ - Attempt to use CPU-local state to batch operations
+-- Attempt to fetch free nodes from global lists
++- Attempt to fetch ``target_free`` free nodes from global lists
+ - Attempt to pull any node from a global list and remove it from the hashmap
+ - Attempt to pull any node from any CPU's list and remove it from the hashmap
+ 
++The number of nodes to borrow from the global list in a batch, ``target_free``,
++depends on the size of the map. Larger batch size reduces lock contention, but
++may also exhaust the global structure. The value is computed at map init to
++avoid exhaustion, by limiting aggregate reservation by all CPUs to half the map
++size. With a minimum of a single element and maximum budget of 128 at a time.
++
+ This algorithm is described visually in the following diagram. See the
+ description in commit 3a08c2fd7634 ("bpf: LRU List") for a full explanation of
+ the corresponding operations:
+diff --git a/Documentation/bpf/map_lru_hash_update.dot b/Documentation/bpf/map_lru_hash_update.dot
+index a0fee34..ab10058 100644
+--- a/Documentation/bpf/map_lru_hash_update.dot
++++ b/Documentation/bpf/map_lru_hash_update.dot
+@@ -35,18 +35,18 @@ digraph {
+   fn_bpf_lru_list_pop_free_to_local [shape=rectangle,fillcolor=2,
+     label="Flush local pending,
+     Rotate Global list, move
+-    LOCAL_FREE_TARGET
++    target_free
+     from global -> local"]
+   // Also corresponds to:
+   // fn__local_list_flush()
+   // fn_bpf_lru_list_rotate()
+   fn___bpf_lru_node_move_to_free[shape=diamond,fillcolor=2,
+-    label="Able to free\nLOCAL_FREE_TARGET\nnodes?"]
++    label="Able to free\ntarget_free\nnodes?"]
+ 
+   fn___bpf_lru_list_shrink_inactive [shape=rectangle,fillcolor=3,
+     label="Shrink inactive list
+       up to remaining
+-      LOCAL_FREE_TARGET
++      target_free
+       (global LRU -> local)"]
+   fn___bpf_lru_list_shrink [shape=diamond,fillcolor=2,
+     label="> 0 entries in\nlocal free list?"]
+diff --git a/kernel/bpf/bpf_cgrp_storage.c b/kernel/bpf/bpf_cgrp_storage.c
+index 6547fb7..129a51b 100644
+--- a/kernel/bpf/bpf_cgrp_storage.c
++++ b/kernel/bpf/bpf_cgrp_storage.c
+@@ -162,6 +162,7 @@ BPF_CALL_5(bpf_cgrp_storage_get, struct bpf_map *, map, struct cgroup *, cgroup,
+ 	   void *, value, u64, flags, gfp_t, gfp_flags)
+ {
+ 	struct bpf_local_storage_data *sdata;
++	bool nobusy;
+ 
+ 	WARN_ON_ONCE(!bpf_rcu_lock_held());
+ 	if (flags & ~(BPF_LOCAL_STORAGE_GET_F_CREATE))
+@@ -170,21 +171,21 @@ BPF_CALL_5(bpf_cgrp_storage_get, struct bpf_map *, map, struct cgroup *, cgroup,
+ 	if (!cgroup)
+ 		return (unsigned long)NULL;
+ 
+-	if (!bpf_cgrp_storage_trylock())
+-		return (unsigned long)NULL;
++	nobusy = bpf_cgrp_storage_trylock();
+ 
+-	sdata = cgroup_storage_lookup(cgroup, map, true);
++	sdata = cgroup_storage_lookup(cgroup, map, nobusy);
+ 	if (sdata)
+ 		goto unlock;
+ 
+ 	/* only allocate new storage, when the cgroup is refcounted */
+ 	if (!percpu_ref_is_dying(&cgroup->self.refcnt) &&
+-	    (flags & BPF_LOCAL_STORAGE_GET_F_CREATE))
++	    (flags & BPF_LOCAL_STORAGE_GET_F_CREATE) && nobusy)
+ 		sdata = bpf_local_storage_update(cgroup, (struct bpf_local_storage_map *)map,
+ 						 value, BPF_NOEXIST, gfp_flags);
+ 
+ unlock:
+-	bpf_cgrp_storage_unlock();
++	if (nobusy)
++		bpf_cgrp_storage_unlock();
+ 	return IS_ERR_OR_NULL(sdata) ? (unsigned long)NULL : (unsigned long)sdata->data;
+ }
+ 
+diff --git a/kernel/bpf/bpf_lru_list.c b/kernel/bpf/bpf_lru_list.c
+index 3dabdd1..2d6e1c9 100644
+--- a/kernel/bpf/bpf_lru_list.c
++++ b/kernel/bpf/bpf_lru_list.c
+@@ -337,12 +337,12 @@ static void bpf_lru_list_pop_free_to_local(struct bpf_lru *lru,
+ 				 list) {
+ 		__bpf_lru_node_move_to_free(l, node, local_free_list(loc_l),
+ 					    BPF_LRU_LOCAL_LIST_T_FREE);
+-		if (++nfree == LOCAL_FREE_TARGET)
++		if (++nfree == lru->target_free)
+ 			break;
+ 	}
+ 
+-	if (nfree < LOCAL_FREE_TARGET)
+-		__bpf_lru_list_shrink(lru, l, LOCAL_FREE_TARGET - nfree,
++	if (nfree < lru->target_free)
++		__bpf_lru_list_shrink(lru, l, lru->target_free - nfree,
+ 				      local_free_list(loc_l),
+ 				      BPF_LRU_LOCAL_LIST_T_FREE);
+ 
+@@ -577,6 +577,9 @@ static void bpf_common_lru_populate(struct bpf_lru *lru, void *buf,
+ 		list_add(&node->list, &l->lists[BPF_LRU_LIST_T_FREE]);
+ 		buf += elem_size;
+ 	}
++
++	lru->target_free = clamp((nr_elems / num_possible_cpus()) / 2,
++				 1, LOCAL_FREE_TARGET);
+ }
+ 
+ static void bpf_percpu_lru_populate(struct bpf_lru *lru, void *buf,
+diff --git a/kernel/bpf/bpf_lru_list.h b/kernel/bpf/bpf_lru_list.h
+index cbd8d37..fe2661a 100644
+--- a/kernel/bpf/bpf_lru_list.h
++++ b/kernel/bpf/bpf_lru_list.h
+@@ -58,6 +58,7 @@ struct bpf_lru {
+ 	del_from_htab_func del_from_htab;
+ 	void *del_arg;
+ 	unsigned int hash_offset;
++	unsigned int target_free;
+ 	unsigned int nr_scans;
+ 	bool percpu;
+ };
+diff --git a/kernel/bpf/btf.c b/kernel/bpf/btf.c
+index 199524b..efb813e 100644
+--- a/kernel/bpf/btf.c
++++ b/kernel/bpf/btf.c
+@@ -6783,10 +6783,10 @@ bool btf_ctx_access(int off, int size, enum bpf_access_type type,
+ 			/* Is this a func with potential NULL args? */
+ 			if (strcmp(tname, raw_tp_null_args[i].func))
+ 				continue;
+-			if (raw_tp_null_args[i].mask & (0x1 << (arg * 4)))
++			if (raw_tp_null_args[i].mask & (0x1ULL << (arg * 4)))
+ 				info->reg_type |= PTR_MAYBE_NULL;
+ 			/* Is the current arg IS_ERR? */
+-			if (raw_tp_null_args[i].mask & (0x2 << (arg * 4)))
++			if (raw_tp_null_args[i].mask & (0x2ULL << (arg * 4)))
+ 				ptr_err_raw_tp = true;
+ 			break;
+ 		}
+diff --git a/kernel/bpf/cgroup.c b/kernel/bpf/cgroup.c
+index 025d7e2..56bdebc 100644
+--- a/kernel/bpf/cgroup.c
++++ b/kernel/bpf/cgroup.c
+@@ -2401,22 +2401,22 @@ static bool cg_sockopt_is_valid_access(int off, int size,
+ 	}
+ 
+ 	switch (off) {
+-	case offsetof(struct bpf_sockopt, sk):
++	case bpf_ctx_range_ptr(struct bpf_sockopt, sk):
+ 		if (size != sizeof(__u64))
+ 			return false;
+ 		info->reg_type = PTR_TO_SOCKET;
+ 		break;
+-	case offsetof(struct bpf_sockopt, optval):
++	case bpf_ctx_range_ptr(struct bpf_sockopt, optval):
+ 		if (size != sizeof(__u64))
+ 			return false;
+ 		info->reg_type = PTR_TO_PACKET;
+ 		break;
+-	case offsetof(struct bpf_sockopt, optval_end):
++	case bpf_ctx_range_ptr(struct bpf_sockopt, optval_end):
+ 		if (size != sizeof(__u64))
+ 			return false;
+ 		info->reg_type = PTR_TO_PACKET_END;
+ 		break;
+-	case offsetof(struct bpf_sockopt, retval):
++	case bpf_ctx_range(struct bpf_sockopt, retval):
+ 		if (size != size_default)
+ 			return false;
+ 		return prog->expected_attach_type == BPF_CGROUP_GETSOCKOPT;
+diff --git a/kernel/bpf/core.c b/kernel/bpf/core.c
+index a60a6a2..a713cc7 100644
+--- a/kernel/bpf/core.c
++++ b/kernel/bpf/core.c
+@@ -2303,8 +2303,8 @@ static unsigned int __bpf_prog_ret0_warn(const void *ctx,
+ 	return 0;
+ }
+ 
+-bool bpf_prog_map_compatible(struct bpf_map *map,
+-			     const struct bpf_prog *fp)
++static bool __bpf_prog_map_compatible(struct bpf_map *map,
++				      const struct bpf_prog *fp)
+ {
+ 	enum bpf_prog_type prog_type = resolve_prog_type(fp);
+ 	bool ret;
+@@ -2313,14 +2313,6 @@ bool bpf_prog_map_compatible(struct bpf_map *map,
+ 	if (fp->kprobe_override)
+ 		return false;
+ 
+-	/* XDP programs inserted into maps are not guaranteed to run on
+-	 * a particular netdev (and can run outside driver context entirely
+-	 * in the case of devmap and cpumap). Until device checks
+-	 * are implemented, prohibit adding dev-bound programs to program maps.
+-	 */
+-	if (bpf_prog_is_dev_bound(aux))
+-		return false;
+-
+ 	spin_lock(&map->owner.lock);
+ 	if (!map->owner.type) {
+ 		/* There's no owner yet where we could check for
+@@ -2354,6 +2346,19 @@ bool bpf_prog_map_compatible(struct bpf_map *map,
+ 	return ret;
+ }
+ 
++bool bpf_prog_map_compatible(struct bpf_map *map, const struct bpf_prog *fp)
++{
++	/* XDP programs inserted into maps are not guaranteed to run on
++	 * a particular netdev (and can run outside driver context entirely
++	 * in the case of devmap and cpumap). Until device checks
++	 * are implemented, prohibit adding dev-bound programs to program maps.
++	 */
++	if (bpf_prog_is_dev_bound(fp->aux))
++		return false;
++
++	return __bpf_prog_map_compatible(map, fp);
++}
++
+ static int bpf_check_tail_call(const struct bpf_prog *fp)
+ {
+ 	struct bpf_prog_aux *aux = fp->aux;
+@@ -2366,7 +2371,7 @@ static int bpf_check_tail_call(const struct bpf_prog *fp)
+ 		if (!map_type_contains_progs(map))
+ 			continue;
+ 
+-		if (!bpf_prog_map_compatible(map, fp)) {
++		if (!__bpf_prog_map_compatible(map, fp)) {
+ 			ret = -EINVAL;
+ 			goto out;
+ 		}
+diff --git a/kernel/bpf/hashtab.c b/kernel/bpf/hashtab.c
+index 3394cef..1252cb1 100644
+--- a/kernel/bpf/hashtab.c
++++ b/kernel/bpf/hashtab.c
+@@ -2227,7 +2227,7 @@ static long bpf_for_each_hash_elem(struct bpf_map *map, bpf_callback_t callback_
+ 		b = &htab->buckets[i];
+ 		rcu_read_lock();
+ 		head = &b->head;
+-		hlist_nulls_for_each_entry_rcu(elem, n, head, hash_node) {
++		hlist_nulls_for_each_entry_safe(elem, n, head, hash_node) {
+ 			key = elem->key;
+ 			if (is_percpu) {
+ 				/* current cpu value for percpu map */
+diff --git a/kernel/bpf/helpers.c b/kernel/bpf/helpers.c
+index 9173d10..6cf165c 100644
+--- a/kernel/bpf/helpers.c
++++ b/kernel/bpf/helpers.c
+@@ -883,6 +883,13 @@ int bpf_bprintf_prepare(char *fmt, u32 fmt_size, const u64 *raw_args,
+ 		if (fmt[i] == 'p') {
+ 			sizeof_cur_arg = sizeof(long);
+ 
++			if (fmt[i + 1] == 0 || isspace(fmt[i + 1]) ||
++			    ispunct(fmt[i + 1])) {
++				if (tmp_buf)
++					cur_arg = raw_args[num_spec];
++				goto nocopy_fmt;
++			}
++
+ 			if ((fmt[i + 1] == 'k' || fmt[i + 1] == 'u') &&
+ 			    fmt[i + 2] == 's') {
+ 				fmt_ptype = fmt[i + 1];
+@@ -890,11 +897,9 @@ int bpf_bprintf_prepare(char *fmt, u32 fmt_size, const u64 *raw_args,
+ 				goto fmt_str;
+ 			}
+ 
+-			if (fmt[i + 1] == 0 || isspace(fmt[i + 1]) ||
+-			    ispunct(fmt[i + 1]) || fmt[i + 1] == 'K' ||
++			if (fmt[i + 1] == 'K' ||
+ 			    fmt[i + 1] == 'x' || fmt[i + 1] == 's' ||
+ 			    fmt[i + 1] == 'S') {
+-				/* just kernel pointers */
+ 				if (tmp_buf)
+ 					cur_arg = raw_args[num_spec];
+ 				i++;
+diff --git a/kernel/bpf/syscall.c b/kernel/bpf/syscall.c
+index 696e5a2..8cc754e 100644
+--- a/kernel/bpf/syscall.c
++++ b/kernel/bpf/syscall.c
+@@ -4606,6 +4606,8 @@ static int bpf_prog_get_info_by_fd(struct file *file,
+ 	info.recursion_misses = stats.misses;
+ 
+ 	info.verified_insns = prog->aux->verified_insns;
++	if (prog->aux->btf)
++		info.btf_id = btf_obj_id(prog->aux->btf);
+ 
+ 	if (!bpf_capable()) {
+ 		info.jited_prog_len = 0;
+@@ -4752,8 +4754,6 @@ static int bpf_prog_get_info_by_fd(struct file *file,
+ 		}
+ 	}
+ 
+-	if (prog->aux->btf)
+-		info.btf_id = btf_obj_id(prog->aux->btf);
+ 	info.attach_btf_id = prog->aux->attach_btf_id;
+ 	if (attach_btf)
+ 		info.attach_btf_obj_id = btf_obj_id(attach_btf);
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 09b82f4..4026136 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -22354,6 +22354,33 @@ BTF_ID(func, __rcu_read_unlock)
+ #endif
+ BTF_SET_END(btf_id_deny)
+ 
++/* fexit and fmod_ret can't be used to attach to __noreturn functions.
++ * Currently, we must manually list all __noreturn functions here. Once a more
++ * robust solution is implemented, this workaround can be removed.
++ */
++BTF_SET_START(noreturn_deny)
++#ifdef CONFIG_IA32_EMULATION
++BTF_ID(func, __ia32_sys_exit)
++BTF_ID(func, __ia32_sys_exit_group)
++#endif
++#ifdef CONFIG_KUNIT
++BTF_ID(func, __kunit_abort)
++BTF_ID(func, kunit_try_catch_throw)
++#endif
++#ifdef CONFIG_MODULES
++BTF_ID(func, __module_put_and_kthread_exit)
++#endif
++#ifdef CONFIG_X86_64
++BTF_ID(func, __x64_sys_exit)
++BTF_ID(func, __x64_sys_exit_group)
++#endif
++BTF_ID(func, do_exit)
++BTF_ID(func, do_group_exit)
++BTF_ID(func, kthread_complete_and_exit)
++BTF_ID(func, kthread_exit)
++BTF_ID(func, make_task_dead)
++BTF_SET_END(noreturn_deny)
++
+ static bool can_be_sleepable(struct bpf_prog *prog)
+ {
+ 	if (prog->type == BPF_PROG_TYPE_TRACING) {
+@@ -22442,6 +22469,11 @@ static int check_attach_btf_id(struct bpf_verifier_env *env)
+ 	} else if (prog->type == BPF_PROG_TYPE_TRACING &&
+ 		   btf_id_set_contains(&btf_id_deny, btf_id)) {
+ 		return -EINVAL;
++	} else if ((prog->expected_attach_type == BPF_TRACE_FEXIT ||
++		   prog->expected_attach_type == BPF_MODIFY_RETURN) &&
++		   btf_id_set_contains(&noreturn_deny, btf_id)) {
++		verbose(env, "Attaching fexit/fmod_ret to __noreturn functions is rejected.\n");
++		return -EINVAL;
+ 	}
+ 
+ 	key = bpf_trampoline_compute_key(tgt_prog, prog->aux->attach_btf, btf_id);
+diff --git a/net/core/filter.c b/net/core/filter.c
+index 5c83e04..5977a64 100644
+--- a/net/core/filter.c
++++ b/net/core/filter.c
+@@ -8645,7 +8645,7 @@ static bool bpf_skb_is_valid_access(int off, int size, enum bpf_access_type type
+ 		if (size != sizeof(__u64))
+ 			return false;
+ 		break;
+-	case offsetof(struct __sk_buff, sk):
++	case bpf_ctx_range_ptr(struct __sk_buff, sk):
+ 		if (type == BPF_WRITE || size != sizeof(__u64))
+ 			return false;
+ 		info->reg_type = PTR_TO_SOCK_COMMON_OR_NULL;
+@@ -9222,7 +9222,7 @@ static bool sock_addr_is_valid_access(int off, int size,
+ 				return false;
+ 		}
+ 		break;
+-	case offsetof(struct bpf_sock_addr, sk):
++	case bpf_ctx_range_ptr(struct bpf_sock_addr, sk):
+ 		if (type != BPF_READ)
+ 			return false;
+ 		if (size != sizeof(__u64))
+@@ -9272,17 +9272,17 @@ static bool sock_ops_is_valid_access(int off, int size,
+ 			if (size != sizeof(__u64))
+ 				return false;
+ 			break;
+-		case offsetof(struct bpf_sock_ops, sk):
++		case bpf_ctx_range_ptr(struct bpf_sock_ops, sk):
+ 			if (size != sizeof(__u64))
+ 				return false;
+ 			info->reg_type = PTR_TO_SOCKET_OR_NULL;
+ 			break;
+-		case offsetof(struct bpf_sock_ops, skb_data):
++		case bpf_ctx_range_ptr(struct bpf_sock_ops, skb_data):
+ 			if (size != sizeof(__u64))
+ 				return false;
+ 			info->reg_type = PTR_TO_PACKET;
+ 			break;
+-		case offsetof(struct bpf_sock_ops, skb_data_end):
++		case bpf_ctx_range_ptr(struct bpf_sock_ops, skb_data_end):
+ 			if (size != sizeof(__u64))
+ 				return false;
+ 			info->reg_type = PTR_TO_PACKET_END;
+@@ -9291,7 +9291,7 @@ static bool sock_ops_is_valid_access(int off, int size,
+ 			bpf_ctx_record_field_size(info, size_default);
+ 			return bpf_ctx_narrow_access_ok(off, size,
+ 							size_default);
+-		case offsetof(struct bpf_sock_ops, skb_hwtstamp):
++		case bpf_ctx_range(struct bpf_sock_ops, skb_hwtstamp):
+ 			if (size != sizeof(__u64))
+ 				return false;
+ 			break;
+@@ -9361,17 +9361,17 @@ static bool sk_msg_is_valid_access(int off, int size,
+ 		return false;
+ 
+ 	switch (off) {
+-	case offsetof(struct sk_msg_md, data):
++	case bpf_ctx_range_ptr(struct sk_msg_md, data):
+ 		info->reg_type = PTR_TO_PACKET;
+ 		if (size != sizeof(__u64))
+ 			return false;
+ 		break;
+-	case offsetof(struct sk_msg_md, data_end):
++	case bpf_ctx_range_ptr(struct sk_msg_md, data_end):
+ 		info->reg_type = PTR_TO_PACKET_END;
+ 		if (size != sizeof(__u64))
+ 			return false;
+ 		break;
+-	case offsetof(struct sk_msg_md, sk):
++	case bpf_ctx_range_ptr(struct sk_msg_md, sk):
+ 		if (size != sizeof(__u64))
+ 			return false;
+ 		info->reg_type = PTR_TO_SOCKET;
+@@ -11581,7 +11581,7 @@ static bool sk_lookup_is_valid_access(int off, int size,
+ 		return false;
+ 
+ 	switch (off) {
+-	case offsetof(struct bpf_sk_lookup, sk):
++	case bpf_ctx_range_ptr(struct bpf_sk_lookup, sk):
+ 		info->reg_type = PTR_TO_SOCKET_OR_NULL;
+ 		return size == sizeof(__u64);
+ 
+diff --git a/net/core/skmsg.c b/net/core/skmsg.c
+index 97f5239..adb3166 100644
+--- a/net/core/skmsg.c
++++ b/net/core/skmsg.c
+@@ -655,6 +655,13 @@ static void sk_psock_backlog(struct work_struct *work)
+ 	bool ingress;
+ 	int ret;
+ 
++	/* If sk is quickly removed from the map and then added back, the old
++	 * psock should not be scheduled, because there are now two psocks
++	 * pointing to the same sk.
++	 */
++	if (!sk_psock_test_state(psock, SK_PSOCK_TX_ENABLED))
++		return;
++
+ 	/* Increment the psock refcnt to synchronize with close(fd) path in
+ 	 * sock_map_close(), ensuring we wait for backlog thread completion
+ 	 * before sk_socket freed. If refcnt increment fails, it indicates
+diff --git a/samples/bpf/Makefile b/samples/bpf/Makefile
+index 7afe040..f06f88b 100644
+--- a/samples/bpf/Makefile
++++ b/samples/bpf/Makefile
+@@ -400,7 +400,7 @@ $(obj)/%.o: $(src)/%.c
+ 	@echo "  CLANG-bpf " $@
+ 	$(Q)$(CLANG) $(NOSTDINC_FLAGS) $(LINUXINCLUDE) $(BPF_EXTRA_CFLAGS) \
+ 		-I$(obj) -I$(srctree)/tools/testing/selftests/bpf/ \
+-		-I$(LIBBPF_INCLUDE) \
++		-I$(LIBBPF_INCLUDE) $(CLANG_SYS_INCLUDES) \
+ 		-D__KERNEL__ -D__BPF_TRACING__ -Wno-unused-value -Wno-pointer-sign \
+ 		-D__TARGET_ARCH_$(SRCARCH) -Wno-compare-distinct-pointer-types \
+ 		-Wno-gnu-variable-sized-type-not-at-end \
+diff --git a/tools/bpf/resolve_btfids/Makefile b/tools/bpf/resolve_btfids/Makefile
+index 4b8079f..b0072e6 100644
+--- a/tools/bpf/resolve_btfids/Makefile
++++ b/tools/bpf/resolve_btfids/Makefile
+@@ -19,7 +19,7 @@ endif
+ 
+ # Overrides for the prepare step libraries.
+ HOST_OVERRIDES := AR="$(HOSTAR)" CC="$(HOSTCC)" LD="$(HOSTLD)" ARCH="$(HOSTARCH)" \
+-		  CROSS_COMPILE="" EXTRA_CFLAGS="$(HOSTCFLAGS)"
++		  CROSS_COMPILE="" CLANG_CROSS_FLAGS="" EXTRA_CFLAGS="$(HOSTCFLAGS)"
+ 
+ RM      ?= rm
+ HOSTCC  ?= gcc
+diff --git a/tools/lib/bpf/bpf_core_read.h b/tools/lib/bpf/bpf_core_read.h
+index c0e13cd..b997c68 100644
+--- a/tools/lib/bpf/bpf_core_read.h
++++ b/tools/lib/bpf/bpf_core_read.h
+@@ -388,7 +388,13 @@ extern void *bpf_rdonly_cast(const void *obj, __u32 btf_id) __ksym __weak;
+ #define ___arrow10(a, b, c, d, e, f, g, h, i, j) a->b->c->d->e->f->g->h->i->j
+ #define ___arrow(...) ___apply(___arrow, ___narg(__VA_ARGS__))(__VA_ARGS__)
+ 
++#if defined(__clang__) && (__clang_major__ >= 19)
++#define ___type(...) __typeof_unqual__(___arrow(__VA_ARGS__))
++#elif defined(__GNUC__) && (__GNUC__ >= 14)
++#define ___type(...) __typeof_unqual__(___arrow(__VA_ARGS__))
++#else
+ #define ___type(...) typeof(___arrow(__VA_ARGS__))
++#endif
+ 
+ #define ___read(read_fn, dst, src_type, src, accessor)			    \
+ 	read_fn((void *)(dst), sizeof(*(dst)), &((src_type)(src))->accessor)
+diff --git a/tools/lib/bpf/btf.c b/tools/lib/bpf/btf.c
+index 27e7bfa..79d52c5 100644
+--- a/tools/lib/bpf/btf.c
++++ b/tools/lib/bpf/btf.c
+@@ -4176,6 +4176,19 @@ static bool btf_dedup_identical_structs(struct btf_dedup *d, __u32 id1, __u32 id
+ 	return true;
+ }
+ 
++static bool btf_dedup_identical_ptrs(struct btf_dedup *d, __u32 id1, __u32 id2)
++{
++	struct btf_type *t1, *t2;
++
++	t1 = btf_type_by_id(d->btf, id1);
++	t2 = btf_type_by_id(d->btf, id2);
++
++	if (!btf_is_ptr(t1) || !btf_is_ptr(t2))
++		return false;
++
++	return t1->type == t2->type;
++}
++
+ /*
+  * Check equivalence of BTF type graph formed by candidate struct/union (we'll
+  * call it "candidate graph" in this description for brevity) to a type graph
+@@ -4308,6 +4321,9 @@ static int btf_dedup_is_equiv(struct btf_dedup *d, __u32 cand_id,
+ 		 */
+ 		if (btf_dedup_identical_structs(d, hypot_type_id, cand_id))
+ 			return 1;
++		/* A similar case is again observed for PTRs. */
++		if (btf_dedup_identical_ptrs(d, hypot_type_id, cand_id))
++			return 1;
+ 		return 0;
+ 	}
+ 
+diff --git a/tools/testing/selftests/bpf/prog_tests/fexit_noreturns.c b/tools/testing/selftests/bpf/prog_tests/fexit_noreturns.c
+new file mode 100644
+index 0000000..568d3aa
+--- /dev/null
++++ b/tools/testing/selftests/bpf/prog_tests/fexit_noreturns.c
+@@ -0,0 +1,9 @@
++// SPDX-License-Identifier: GPL-2.0
++
++#include <test_progs.h>
++#include "fexit_noreturns.skel.h"
++
++void test_fexit_noreturns(void)
++{
++	RUN_TESTS(fexit_noreturns);
++}
+diff --git a/tools/testing/selftests/bpf/prog_tests/for_each.c b/tools/testing/selftests/bpf/prog_tests/for_each.c
+index 09f6487..5fea320 100644
+--- a/tools/testing/selftests/bpf/prog_tests/for_each.c
++++ b/tools/testing/selftests/bpf/prog_tests/for_each.c
+@@ -6,6 +6,7 @@
+ #include "for_each_array_map_elem.skel.h"
+ #include "for_each_map_elem_write_key.skel.h"
+ #include "for_each_multi_maps.skel.h"
++#include "for_each_hash_modify.skel.h"
+ 
+ static unsigned int duration;
+ 
+@@ -203,6 +204,40 @@ out:
+ 	for_each_multi_maps__destroy(skel);
+ }
+ 
++static void test_hash_modify(void)
++{
++	struct for_each_hash_modify *skel;
++	int max_entries, i, err;
++	__u64 key, val;
++
++	LIBBPF_OPTS(bpf_test_run_opts, topts,
++		.data_in = &pkt_v4,
++		.data_size_in = sizeof(pkt_v4),
++		.repeat = 1
++	);
++
++	skel = for_each_hash_modify__open_and_load();
++	if (!ASSERT_OK_PTR(skel, "for_each_hash_modify__open_and_load"))
++		return;
++
++	max_entries = bpf_map__max_entries(skel->maps.hashmap);
++	for (i = 0; i < max_entries; i++) {
++		key = i;
++		val = i;
++		err = bpf_map__update_elem(skel->maps.hashmap, &key, sizeof(key),
++					   &val, sizeof(val), BPF_ANY);
++		if (!ASSERT_OK(err, "map_update"))
++			goto out;
++	}
++
++	err = bpf_prog_test_run_opts(bpf_program__fd(skel->progs.test_pkt_access), &topts);
++	ASSERT_OK(err, "bpf_prog_test_run_opts");
++	ASSERT_OK(topts.retval, "retval");
++
++out:
++	for_each_hash_modify__destroy(skel);
++}
++
+ void test_for_each(void)
+ {
+ 	if (test__start_subtest("hash_map"))
+@@ -213,4 +248,6 @@ void test_for_each(void)
+ 		test_write_map_key();
+ 	if (test__start_subtest("multi_maps"))
+ 		test_multi_maps();
++	if (test__start_subtest("hash_modify"))
++		test_hash_modify();
+ }
+diff --git a/tools/testing/selftests/bpf/prog_tests/snprintf.c b/tools/testing/selftests/bpf/prog_tests/snprintf.c
+index 4be6fdb..594441a 100644
+--- a/tools/testing/selftests/bpf/prog_tests/snprintf.c
++++ b/tools/testing/selftests/bpf/prog_tests/snprintf.c
+@@ -116,6 +116,8 @@ static void test_snprintf_negative(void)
+ 	ASSERT_ERR(load_single_snprintf("%llc"), "invalid specifier 7");
+ 	ASSERT_ERR(load_single_snprintf("\x80"), "non ascii character");
+ 	ASSERT_ERR(load_single_snprintf("\x1"), "non printable character");
++	ASSERT_ERR(load_single_snprintf("%p%"), "invalid specifier 8");
++	ASSERT_ERR(load_single_snprintf("%s%"), "invalid specifier 9");
+ }
+ 
+ void test_snprintf(void)
+diff --git a/tools/testing/selftests/bpf/prog_tests/sockmap_ktls.c b/tools/testing/selftests/bpf/prog_tests/sockmap_ktls.c
+index 2d07963..0a99fd4 100644
+--- a/tools/testing/selftests/bpf/prog_tests/sockmap_ktls.c
++++ b/tools/testing/selftests/bpf/prog_tests/sockmap_ktls.c
+@@ -68,7 +68,6 @@ static void test_sockmap_ktls_disconnect_after_delete(int family, int map)
+ 		goto close_cli;
+ 
+ 	err = disconnect(cli);
+-	ASSERT_OK(err, "disconnect");
+ 
+ close_cli:
+ 	close(cli);
+diff --git a/tools/testing/selftests/bpf/prog_tests/sockmap_listen.c b/tools/testing/selftests/bpf/prog_tests/sockmap_listen.c
+index 4ee1148..1cfed83 100644
+--- a/tools/testing/selftests/bpf/prog_tests/sockmap_listen.c
++++ b/tools/testing/selftests/bpf/prog_tests/sockmap_listen.c
+@@ -924,6 +924,8 @@ static void redir_partial(int family, int sotype, int sock_map, int parser_map)
+ 		goto close;
+ 
+ 	n = xsend(c1, buf, sizeof(buf), 0);
++	if (n == -1)
++		goto close;
+ 	if (n < sizeof(buf))
+ 		FAIL("incomplete write");
+ 
+diff --git a/tools/testing/selftests/bpf/progs/fexit_noreturns.c b/tools/testing/selftests/bpf/progs/fexit_noreturns.c
+new file mode 100644
+index 0000000..5465453
+--- /dev/null
++++ b/tools/testing/selftests/bpf/progs/fexit_noreturns.c
+@@ -0,0 +1,15 @@
++// SPDX-License-Identifier: GPL-2.0
++
++#include <linux/bpf.h>
++#include <bpf/bpf_helpers.h>
++#include <bpf/bpf_tracing.h>
++#include "bpf_misc.h"
++
++char _license[] SEC("license") = "GPL";
++
++SEC("fexit/do_exit")
++__failure __msg("Attaching fexit/fmod_ret to __noreturn functions is rejected.")
++int BPF_PROG(noreturns)
++{
++	return 0;
++}
+diff --git a/tools/testing/selftests/bpf/progs/for_each_hash_modify.c b/tools/testing/selftests/bpf/progs/for_each_hash_modify.c
+new file mode 100644
+index 0000000..8230716
+--- /dev/null
++++ b/tools/testing/selftests/bpf/progs/for_each_hash_modify.c
+@@ -0,0 +1,30 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (c) 2025 Intel Corporation */
++#include "vmlinux.h"
++#include <bpf/bpf_helpers.h>
++
++char _license[] SEC("license") = "GPL";
++
++struct {
++	__uint(type, BPF_MAP_TYPE_HASH);
++	__uint(max_entries, 128);
++	__type(key, __u64);
++	__type(value, __u64);
++} hashmap SEC(".maps");
++
++static int cb(struct bpf_map *map, __u64 *key, __u64 *val, void *arg)
++{
++	bpf_map_delete_elem(map, key);
++	bpf_map_update_elem(map, key, val, 0);
++	return 0;
++}
++
++SEC("tc")
++int test_pkt_access(struct __sk_buff *skb)
++{
++	(void)skb;
++
++	bpf_for_each_map_elem(&hashmap, cb, NULL, 0);
++
++	return 0;
++}
+diff --git a/tools/testing/selftests/bpf/progs/strncmp_bench.c b/tools/testing/selftests/bpf/progs/strncmp_bench.c
+index 18373a7..f47bf88 100644
+--- a/tools/testing/selftests/bpf/progs/strncmp_bench.c
++++ b/tools/testing/selftests/bpf/progs/strncmp_bench.c
+@@ -35,7 +35,10 @@ static __always_inline int local_strncmp(const char *s1, unsigned int sz,
+ SEC("tp/syscalls/sys_enter_getpgid")
+ int strncmp_no_helper(void *ctx)
+ {
+-	if (local_strncmp(str, cmp_str_len + 1, target) < 0)
++	const char *target_str = target;
++
++	barrier_var(target_str);
++	if (local_strncmp(str, cmp_str_len + 1, target_str) < 0)
+ 		__sync_add_and_fetch(&hits, 1);
+ 	return 0;
+ }
+diff --git a/tools/testing/selftests/bpf/progs/verifier_ctx.c b/tools/testing/selftests/bpf/progs/verifier_ctx.c
+index a83809a..0450840 100644
+--- a/tools/testing/selftests/bpf/progs/verifier_ctx.c
++++ b/tools/testing/selftests/bpf/progs/verifier_ctx.c
+@@ -218,4 +218,29 @@ __naked void null_check_8_null_bind(void)
+ 	: __clobber_all);
+ }
+ 
++#define narrow_load(type, ctx, field)					\
++	SEC(type)							\
++	__description("narrow load on field " #field " of " #ctx)	\
++	__failure __msg("invalid bpf_context access")			\
++	__naked void invalid_narrow_load##ctx##field(void)		\
++	{								\
++		asm volatile ("						\
++		r1 = *(u32 *)(r1 + %[off]);				\
++		r0 = 0;							\
++		exit;"							\
++		:							\
++		: __imm_const(off, offsetof(struct ctx, field) + 4)	\
++		: __clobber_all);					\
++	}
++
++narrow_load("cgroup/getsockopt", bpf_sockopt, sk);
++narrow_load("cgroup/getsockopt", bpf_sockopt, optval);
++narrow_load("cgroup/getsockopt", bpf_sockopt, optval_end);
++narrow_load("tc", __sk_buff, sk);
++narrow_load("cgroup/bind4", bpf_sock_addr, sk);
++narrow_load("sockops", bpf_sock_ops, sk);
++narrow_load("sockops", bpf_sock_ops, skb_data);
++narrow_load("sockops", bpf_sock_ops, skb_data_end);
++narrow_load("sockops", bpf_sock_ops, skb_hwtstamp);
++
+ char _license[] SEC("license") = "GPL";
+diff --git a/tools/testing/selftests/bpf/sdt.h b/tools/testing/selftests/bpf/sdt.h
+index ca0162b..1fcfa51 100644
+--- a/tools/testing/selftests/bpf/sdt.h
++++ b/tools/testing/selftests/bpf/sdt.h
+@@ -102,6 +102,8 @@
+ # define STAP_SDT_ARG_CONSTRAINT        nZr
+ # elif defined __arm__
+ # define STAP_SDT_ARG_CONSTRAINT        g
++# elif defined __loongarch__
++# define STAP_SDT_ARG_CONSTRAINT        nmr
+ # else
+ # define STAP_SDT_ARG_CONSTRAINT        nor
+ # endif
+diff --git a/tools/testing/selftests/bpf/test_lru_map.c b/tools/testing/selftests/bpf/test_lru_map.c
+index fda7589..4ae83f4 100644
+--- a/tools/testing/selftests/bpf/test_lru_map.c
++++ b/tools/testing/selftests/bpf/test_lru_map.c
+@@ -138,6 +138,12 @@ static int sched_next_online(int pid, int *next_to_try)
+ 	return ret;
+ }
+ 
++/* Inverse of how bpf_common_lru_populate derives target_free from map_size. */
++static unsigned int __map_size(unsigned int tgt_free)
++{
++	return tgt_free * nr_cpus * 2;
++}
++
+ /* Size of the LRU map is 2
+  * Add key=1 (+1 key)
+  * Add key=2 (+1 key)
+@@ -231,11 +237,11 @@ static void test_lru_sanity0(int map_type, int map_flags)
+ 	printf("Pass\n");
+ }
+ 
+-/* Size of the LRU map is 1.5*tgt_free
+- * Insert 1 to tgt_free (+tgt_free keys)
+- * Lookup 1 to tgt_free/2
+- * Insert 1+tgt_free to 2*tgt_free (+tgt_free keys)
+- * => 1+tgt_free/2 to LOCALFREE_TARGET will be removed by LRU
++/* Verify that unreferenced elements are recycled before referenced ones.
++ * Insert elements.
++ * Reference a subset of these.
++ * Insert more, enough to trigger recycling.
++ * Verify that unreferenced are recycled.
+  */
+ static void test_lru_sanity1(int map_type, int map_flags, unsigned int tgt_free)
+ {
+@@ -257,7 +263,7 @@ static void test_lru_sanity1(int map_type, int map_flags, unsigned int tgt_free)
+ 	batch_size = tgt_free / 2;
+ 	assert(batch_size * 2 == tgt_free);
+ 
+-	map_size = tgt_free + batch_size;
++	map_size = __map_size(tgt_free) + batch_size;
+ 	lru_map_fd = create_map(map_type, map_flags, map_size);
+ 	assert(lru_map_fd != -1);
+ 
+@@ -266,13 +272,13 @@ static void test_lru_sanity1(int map_type, int map_flags, unsigned int tgt_free)
+ 
+ 	value[0] = 1234;
+ 
+-	/* Insert 1 to tgt_free (+tgt_free keys) */
+-	end_key = 1 + tgt_free;
++	/* Insert map_size - batch_size keys */
++	end_key = 1 + __map_size(tgt_free);
+ 	for (key = 1; key < end_key; key++)
+ 		assert(!bpf_map_update_elem(lru_map_fd, &key, value,
+ 					    BPF_NOEXIST));
+ 
+-	/* Lookup 1 to tgt_free/2 */
++	/* Lookup 1 to batch_size */
+ 	end_key = 1 + batch_size;
+ 	for (key = 1; key < end_key; key++) {
+ 		assert(!bpf_map_lookup_elem_with_ref_bit(lru_map_fd, key, value));
+@@ -280,12 +286,13 @@ static void test_lru_sanity1(int map_type, int map_flags, unsigned int tgt_free)
+ 					    BPF_NOEXIST));
+ 	}
+ 
+-	/* Insert 1+tgt_free to 2*tgt_free
+-	 * => 1+tgt_free/2 to LOCALFREE_TARGET will be
++	/* Insert another map_size - batch_size keys
++	 * Map will contain 1 to batch_size plus these latest, i.e.,
++	 * => previous 1+batch_size to map_size - batch_size will have been
+ 	 * removed by LRU
+ 	 */
+-	key = 1 + tgt_free;
+-	end_key = key + tgt_free;
++	key = 1 + __map_size(tgt_free);
++	end_key = key + __map_size(tgt_free);
+ 	for (; key < end_key; key++) {
+ 		assert(!bpf_map_update_elem(lru_map_fd, &key, value,
+ 					    BPF_NOEXIST));
+@@ -301,17 +308,8 @@ static void test_lru_sanity1(int map_type, int map_flags, unsigned int tgt_free)
+ 	printf("Pass\n");
+ }
+ 
+-/* Size of the LRU map 1.5 * tgt_free
+- * Insert 1 to tgt_free (+tgt_free keys)
+- * Update 1 to tgt_free/2
+- *   => The original 1 to tgt_free/2 will be removed due to
+- *      the LRU shrink process
+- * Re-insert 1 to tgt_free/2 again and do a lookup immeidately
+- * Insert 1+tgt_free to tgt_free*3/2
+- * Insert 1+tgt_free*3/2 to tgt_free*5/2
+- *   => Key 1+tgt_free to tgt_free*3/2
+- *      will be removed from LRU because it has never
+- *      been lookup and ref bit is not set
++/* Verify that insertions exceeding map size will recycle the oldest.
++ * Verify that unreferenced elements are recycled before referenced.
+  */
+ static void test_lru_sanity2(int map_type, int map_flags, unsigned int tgt_free)
+ {
+@@ -334,7 +332,7 @@ static void test_lru_sanity2(int map_type, int map_flags, unsigned int tgt_free)
+ 	batch_size = tgt_free / 2;
+ 	assert(batch_size * 2 == tgt_free);
+ 
+-	map_size = tgt_free + batch_size;
++	map_size = __map_size(tgt_free) + batch_size;
+ 	lru_map_fd = create_map(map_type, map_flags, map_size);
+ 	assert(lru_map_fd != -1);
+ 
+@@ -343,8 +341,8 @@ static void test_lru_sanity2(int map_type, int map_flags, unsigned int tgt_free)
+ 
+ 	value[0] = 1234;
+ 
+-	/* Insert 1 to tgt_free (+tgt_free keys) */
+-	end_key = 1 + tgt_free;
++	/* Insert map_size - batch_size keys */
++	end_key = 1 + __map_size(tgt_free);
+ 	for (key = 1; key < end_key; key++)
+ 		assert(!bpf_map_update_elem(lru_map_fd, &key, value,
+ 					    BPF_NOEXIST));
+@@ -357,8 +355,7 @@ static void test_lru_sanity2(int map_type, int map_flags, unsigned int tgt_free)
+ 	 * shrink the inactive list to get tgt_free
+ 	 * number of free nodes.
+ 	 *
+-	 * Hence, the oldest key 1 to tgt_free/2
+-	 * are removed from the LRU list.
++	 * Hence, the oldest key is removed from the LRU list.
+ 	 */
+ 	key = 1;
+ 	if (map_type == BPF_MAP_TYPE_LRU_PERCPU_HASH) {
+@@ -370,8 +367,7 @@ static void test_lru_sanity2(int map_type, int map_flags, unsigned int tgt_free)
+ 					   BPF_EXIST));
+ 	}
+ 
+-	/* Re-insert 1 to tgt_free/2 again and do a lookup
+-	 * immeidately.
++	/* Re-insert 1 to batch_size again and do a lookup immediately.
+ 	 */
+ 	end_key = 1 + batch_size;
+ 	value[0] = 4321;
+@@ -387,17 +383,18 @@ static void test_lru_sanity2(int map_type, int map_flags, unsigned int tgt_free)
+ 
+ 	value[0] = 1234;
+ 
+-	/* Insert 1+tgt_free to tgt_free*3/2 */
+-	end_key = 1 + tgt_free + batch_size;
+-	for (key = 1 + tgt_free; key < end_key; key++)
++	/* Insert batch_size new elements */
++	key = 1 + __map_size(tgt_free);
++	end_key = key + batch_size;
++	for (; key < end_key; key++)
+ 		/* These newly added but not referenced keys will be
+ 		 * gone during the next LRU shrink.
+ 		 */
+ 		assert(!bpf_map_update_elem(lru_map_fd, &key, value,
+ 					    BPF_NOEXIST));
+ 
+-	/* Insert 1+tgt_free*3/2 to  tgt_free*5/2 */
+-	end_key = key + tgt_free;
++	/* Insert map_size - batch_size elements */
++	end_key += __map_size(tgt_free);
+ 	for (; key < end_key; key++) {
+ 		assert(!bpf_map_update_elem(lru_map_fd, &key, value,
+ 					    BPF_NOEXIST));
+@@ -500,7 +497,8 @@ static void test_lru_sanity4(int map_type, int map_flags, unsigned int tgt_free)
+ 		lru_map_fd = create_map(map_type, map_flags,
+ 					3 * tgt_free * nr_cpus);
+ 	else
+-		lru_map_fd = create_map(map_type, map_flags, 3 * tgt_free);
++		lru_map_fd = create_map(map_type, map_flags,
++					3 * __map_size(tgt_free));
+ 	assert(lru_map_fd != -1);
+ 
+ 	expected_map_fd = create_map(BPF_MAP_TYPE_HASH, 0,
+diff --git a/tools/testing/selftests/bpf/veristat.c b/tools/testing/selftests/bpf/veristat.c
+index 1ec5c4c..7b6b9c4 100644
+--- a/tools/testing/selftests/bpf/veristat.c
++++ b/tools/testing/selftests/bpf/veristat.c
+@@ -309,6 +309,7 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
+ 			fprintf(stderr, "invalid top N specifier: %s\n", arg);
+ 			argp_usage(state);
+ 		}
++		break;
+ 	case 'C':
+ 		env.comparison_mode = true;
+ 		break;
