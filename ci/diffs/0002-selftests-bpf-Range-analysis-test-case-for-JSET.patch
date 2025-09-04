@@ -1,0 +1,60 @@
+From 9a1b94552552c9a74394153738c2a2e463f0bcbc Mon Sep 17 00:00:00 2001
+From: Paul Chaignon <paul.chaignon@gmail.com>
+Date: Thu, 10 Jul 2025 20:21:41 +0200
+Subject: [PATCH 2/2] selftests/bpf: Range analysis test case for JSET
+
+[ Upstream commit d81526a6ebff4ac2358b71d40271c8f95212fac1 ]
+
+This patch adds coverage for the warning detected by syzkaller and fixed
+in the previous patch. Without the previous patch, this test fails with:
+
+  verifier bug: REG INVARIANTS VIOLATION (false_reg1): range bounds
+  violation u64=[0x0, 0x0] s64=[0x0, 0x0] u32=[0x1, 0x0] s32=[0x0, 0x0]
+  var_off=(0x0, 0x0)(1)
+
+Signed-off-by: Paul Chaignon <paul.chaignon@gmail.com>
+Acked-by: Yonghong Song <yonghong.song@linux.dev>
+Link: https://lore.kernel.org/r/c7893be1170fdbcf64e0200c110cdbd360ce7086.1752171365.git.paul.chaignon@gmail.com
+Signed-off-by: Alexei Starovoitov <ast@kernel.org>
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ .../selftests/bpf/progs/verifier_bounds.c      | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/progs/verifier_bounds.c b/tools/testing/selftests/bpf/progs/verifier_bounds.c
+index a0bb7fb40ea5..dc7857047e72 100644
+--- a/tools/testing/selftests/bpf/progs/verifier_bounds.c
++++ b/tools/testing/selftests/bpf/progs/verifier_bounds.c
+@@ -2,6 +2,7 @@
+ /* Converted from tools/testing/selftests/bpf/verifier/bounds.c */
+ 
+ #include <linux/bpf.h>
++#include <../../../include/linux/filter.h>
+ #include <bpf/bpf_helpers.h>
+ #include "bpf_misc.h"
+ 
+@@ -1200,4 +1201,21 @@ l0_%=:	r0 = 0;						\
+ 	: __clobber_all);
+ }
+ 
++SEC("socket")
++__description("dead branch on jset, does not result in invariants violation error")
++__success __log_level(2)
++__retval(0) __flag(BPF_F_TEST_REG_INVARIANTS)
++__naked void jset_range_analysis(void)
++{
++	asm volatile ("			\
++	call %[bpf_get_netns_cookie];	\
++	if r0 == 0 goto l0_%=;		\
++	if r0 & 0xffffffff goto +0; 	\
++l0_%=:	r0 = 0;				\
++	exit;				\
++"	:
++	: __imm(bpf_get_netns_cookie)
++	: __clobber_all);
++}
++
+ char _license[] SEC("license") = "GPL";
+-- 
+2.51.0
+
