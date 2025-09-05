@@ -1,0 +1,28 @@
+From 989c3589a39ee257c2470efe059284c51a811f0a Mon Sep 17 00:00:00 2001
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+Date: Fri, 5 Sep 2025 10:28:23 +0800
+Subject: [PATCH 1/2] Revert "bpf: Forget ranges when refining tnum after JSET"
+
+This reverts commit f01e06930444cab289a8783017af9b64255bd103.
+---
+ kernel/bpf/verifier.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 24ae8f33e5d7..b3daabbb3870 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -15053,10 +15053,6 @@ static void regs_refine_cond_op(struct bpf_reg_state *reg1, struct bpf_reg_state
+ 		if (!is_reg_const(reg2, is_jmp32))
+ 			break;
+ 		val = reg_const_value(reg2, is_jmp32);
+-		/* Forget the ranges before narrowing tnums, to avoid invariant
+-		 * violations if we're on a dead branch.
+-		 */
+-		__mark_reg_unbounded(reg1);
+ 		if (is_jmp32) {
+ 			t = tnum_and(tnum_subreg(reg1->var_off), tnum_const(~val));
+ 			reg1->var_off = tnum_with_subreg(reg1->var_off, t);
+-- 
+2.51.0
+
