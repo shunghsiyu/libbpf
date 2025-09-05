@@ -1,4 +1,4 @@
-From 9a1b94552552c9a74394153738c2a2e463f0bcbc Mon Sep 17 00:00:00 2001
+From 4207cd85d36554dbebf2348f417ad2d6018ad237 Mon Sep 17 00:00:00 2001
 From: Paul Chaignon <paul.chaignon@gmail.com>
 Date: Thu, 10 Jul 2025 20:21:41 +0200
 Subject: [PATCH 2/2] selftests/bpf: Range analysis test case for JSET
@@ -22,7 +22,7 @@ Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
  1 file changed, 18 insertions(+)
 
 diff --git a/tools/testing/selftests/bpf/progs/verifier_bounds.c b/tools/testing/selftests/bpf/progs/verifier_bounds.c
-index a0bb7fb40ea5..dc7857047e72 100644
+index a0bb7fb40ea5..b312d51635c5 100644
 --- a/tools/testing/selftests/bpf/progs/verifier_bounds.c
 +++ b/tools/testing/selftests/bpf/progs/verifier_bounds.c
 @@ -2,6 +2,7 @@
@@ -44,13 +44,13 @@ index a0bb7fb40ea5..dc7857047e72 100644
 +__naked void jset_range_analysis(void)
 +{
 +	asm volatile ("			\
-+	call %[bpf_get_netns_cookie];	\
++	call %[bpf_get_prandom_u32];	\
 +	if r0 == 0 goto l0_%=;		\
 +	if r0 & 0xffffffff goto +0; 	\
 +l0_%=:	r0 = 0;				\
 +	exit;				\
 +"	:
-+	: __imm(bpf_get_netns_cookie)
++	: __imm(bpf_get_prandom_u32)
 +	: __clobber_all);
 +}
 +
