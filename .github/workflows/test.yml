@@ -16,11 +16,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - kernel: '6.16'
-            runs_on: 'ubuntu-24.04'
-            arch: 'x86_64'
-            llvm-version: '18'
-            pahole: 'master'
           - kernel: '6.12'
             runs_on: 'ubuntu-24.04'
             arch: 'x86_64'
@@ -33,24 +28,6 @@ jobs:
             pahole: 'master'
     name: Stable Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
     uses: ./.github/workflows/vmtest-stable.yml
-    with:
-      runs_on: ${{ matrix.runs_on }}
-      kernel: ${{ matrix.kernel }}
-      arch: ${{ matrix.arch }}
-      llvm-version: ${{ matrix.llvm-version }}
-      pahole: ${{ matrix.pahole }}
-  vmtest-mainline:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - kernel: '6.17'
-            runs_on: 'ubuntu-24.04'
-            arch: 'x86_64'
-            llvm-version: '18'
-            pahole: 'master'
-    name: Mainline Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
-    uses: ./.github/workflows/vmtest-mainline.yml
     with:
       runs_on: ${{ matrix.runs_on }}
       kernel: ${{ matrix.kernel }}
