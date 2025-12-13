@@ -16,10 +16,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - kernel: '6.16'
+          - kernel: '6.18'
             runs_on: 'ubuntu-24.04'
             arch: 'x86_64'
-            llvm-version: '18'
+            llvm-version: '22'
+            pahole: 'master'
+          - kernel: '6.17'
+            runs_on: 'ubuntu-24.04'
+            arch: 'x86_64'
+            llvm-version: '21'
             pahole: 'master'
           - kernel: '6.12'
             runs_on: 'ubuntu-24.04'
@@ -44,10 +49,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - kernel: '6.17'
+          - kernel: '6.19'
             runs_on: 'ubuntu-24.04'
             arch: 'x86_64'
-            llvm-version: '18'
+            llvm-version: '22'
             pahole: 'master'
     name: Mainline Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
     uses: ./.github/workflows/vmtest-mainline.yml
