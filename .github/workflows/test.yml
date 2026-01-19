@@ -44,7 +44,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - kernel: '6.19'
+          - kernel: 'LATEST'
             runs_on: 'ubuntu-24.04'
             arch: 'x86_64'
             llvm-version: '22'
