@@ -74,7 +74,6 @@ jobs:
           cd -
 
       - name: Build kernel image
-        if: ${{ inputs.kernel == 'LATEST' }}
         shell: bash
         run: |
           cd .kernel
@@ -87,7 +86,7 @@ jobs:
         env:
           MAX_MAKE_JOBS: 32
           VMLINUX_BTF: ${{ github.workspace }}/vmlinux
-          VMLINUX_H: ${{ inputs.kernel != 'LATEST' && format('{0}/.github/actions/build-selftests/vmlinux.h', github.workspace) || '' }}
+          VMLINUX_H: ''
         with:
           arch: ${{ inputs.arch }}
           kernel-root: ${{ github.workspace }}/.kernel
