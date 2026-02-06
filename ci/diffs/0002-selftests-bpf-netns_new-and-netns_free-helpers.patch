@@ -1,0 +1,215 @@
+From d88e8f7c3dea5b4e97e7d2b97f655472f91970a9 Mon Sep 17 00:00:00 2001
+From: Kui-Feng Lee <thinker.li@gmail.com>
+Date: Wed, 14 Aug 2024 22:32:51 -0700
+Subject: [PATCH stable 6.6 02/10] selftests/bpf: netns_new() and netns_free()
+ helpers.
+
+netns_new()/netns_free() create/delete network namespaces. They support the
+option '-m' of test_progs to start/stop traffic monitor for the network
+namespace being created for matched tests.
+
+Acked-by: Stanislav Fomichev <sdf@fomichev.me>
+Signed-off-by: Kui-Feng Lee <thinker.li@gmail.com>
+Link: https://lore.kernel.org/r/20240815053254.470944-4-thinker.li@gmail.com
+Signed-off-by: Martin KaFai Lau <martin.lau@kernel.org>
+---
+ tools/testing/selftests/bpf/network_helpers.c | 46 ++++++++++
+ tools/testing/selftests/bpf/network_helpers.h |  2 +
+ tools/testing/selftests/bpf/test_progs.c      | 88 +++++++++++++++++++
+ tools/testing/selftests/bpf/test_progs.h      |  4 +
+ 4 files changed, 140 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/network_helpers.c b/tools/testing/selftests/bpf/network_helpers.c
+index 0c09324bc111..3c5eab4fa93d 100644
+--- a/tools/testing/selftests/bpf/network_helpers.c
++++ b/tools/testing/selftests/bpf/network_helpers.c
+@@ -410,6 +410,52 @@ char *ping_command(int family)
+ 	return "ping";
+ }
+ 
++int remove_netns(const char *name)
++{
++	char *cmd;
++	int r;
++
++	r = asprintf(&cmd, "ip netns del %s >/dev/null 2>&1", name);
++	if (r < 0) {
++		log_err("Failed to malloc cmd");
++		return -1;
++	}
++
++	r = system(cmd);
++	free(cmd);
++	return r;
++}
++
++int make_netns(const char *name)
++{
++	char *cmd;
++	int r;
++
++	r = asprintf(&cmd, "ip netns add %s", name);
++	if (r < 0) {
++		log_err("Failed to malloc cmd");
++		return -1;
++	}
++
++	r = system(cmd);
++	free(cmd);
++
++	if (r)
++		return r;
++
++	r = asprintf(&cmd, "ip -n %s link set lo up", name);
++	if (r < 0) {
++		log_err("Failed to malloc cmd for setting up lo");
++		remove_netns(name);
++		return -1;
++	}
++
++	r = system(cmd);
++	free(cmd);
++
++	return r;
++}
++
+ struct nstoken {
+ 	int orig_netns_fd;
+ };
+diff --git a/tools/testing/selftests/bpf/network_helpers.h b/tools/testing/selftests/bpf/network_helpers.h
+index 3a046dc42c34..8f1f23e0a0d7 100644
+--- a/tools/testing/selftests/bpf/network_helpers.h
++++ b/tools/testing/selftests/bpf/network_helpers.h
+@@ -70,6 +70,8 @@ struct nstoken;
+  */
+ struct nstoken *open_netns(const char *name);
+ void close_netns(struct nstoken *token);
++int make_netns(const char *name);
++int remove_netns(const char *name);
+ 
+ struct tmonitor_ctx;
+ 
+diff --git a/tools/testing/selftests/bpf/test_progs.c b/tools/testing/selftests/bpf/test_progs.c
+index 2e2ee6a5a3ba..650bb694d84a 100644
+--- a/tools/testing/selftests/bpf/test_progs.c
++++ b/tools/testing/selftests/bpf/test_progs.c
+@@ -18,6 +18,8 @@
+ #include <bpf/btf.h>
+ #include "json_writer.h"
+ 
++#include "network_helpers.h"
++
+ #ifdef __GLIBC__
+ #include <execinfo.h> /* backtrace */
+ #endif
+@@ -660,6 +662,92 @@ int compare_stack_ips(int smap_fd, int amap_fd, int stack_trace_len)
+ 	return err;
+ }
+ 
++struct netns_obj {
++	char *nsname;
++	struct tmonitor_ctx *tmon;
++	struct nstoken *nstoken;
++};
++
++/* Create a new network namespace with the given name.
++ *
++ * Create a new network namespace and set the network namespace of the
++ * current process to the new network namespace if the argument "open" is
++ * true. This function should be paired with netns_free() to release the
++ * resource and delete the network namespace.
++ *
++ * It also implements the functionality of the option "-m" by starting
++ * traffic monitor on the background to capture the packets in this network
++ * namespace if the current test or subtest matching the pattern.
++ *
++ * nsname: the name of the network namespace to create.
++ * open: open the network namespace if true.
++ *
++ * Return: the network namespace object on success, NULL on failure.
++ */
++struct netns_obj *netns_new(const char *nsname, bool open)
++{
++	struct netns_obj *netns_obj = malloc(sizeof(*netns_obj));
++	const char *test_name, *subtest_name;
++	int r;
++
++	if (!netns_obj)
++		return NULL;
++	memset(netns_obj, 0, sizeof(*netns_obj));
++
++	netns_obj->nsname = strdup(nsname);
++	if (!netns_obj->nsname)
++		goto fail;
++
++	/* Create the network namespace */
++	r = make_netns(nsname);
++	if (r)
++		goto fail;
++
++	/* Start traffic monitor */
++	if (env.test->should_tmon ||
++	    (env.subtest_state && env.subtest_state->should_tmon)) {
++		test_name = env.test->test_name;
++		subtest_name = env.subtest_state ? env.subtest_state->name : NULL;
++		netns_obj->tmon = traffic_monitor_start(nsname, test_name, subtest_name);
++		if (!netns_obj->tmon) {
++			fprintf(stderr, "Failed to start traffic monitor for %s\n", nsname);
++			goto fail;
++		}
++	} else {
++		netns_obj->tmon = NULL;
++	}
++
++	if (open) {
++		netns_obj->nstoken = open_netns(nsname);
++		if (!netns_obj->nstoken)
++			goto fail;
++	}
++
++	return netns_obj;
++fail:
++	traffic_monitor_stop(netns_obj->tmon);
++	remove_netns(nsname);
++	free(netns_obj->nsname);
++	free(netns_obj);
++	return NULL;
++}
++
++/* Delete the network namespace.
++ *
++ * This function should be paired with netns_new() to delete the namespace
++ * created by netns_new().
++ */
++void netns_free(struct netns_obj *netns_obj)
++{
++	if (!netns_obj)
++		return;
++	traffic_monitor_stop(netns_obj->tmon);
++	close_netns(netns_obj->nstoken);
++	remove_netns(netns_obj->nsname);
++	free(netns_obj->nsname);
++	free(netns_obj);
++}
++
+ /* extern declarations for test funcs */
+ #define DEFINE_TEST(name)				\
+ 	extern void test_##name(void) __weak;		\
+diff --git a/tools/testing/selftests/bpf/test_progs.h b/tools/testing/selftests/bpf/test_progs.h
+index 479d29dda223..1a2d476e51b9 100644
+--- a/tools/testing/selftests/bpf/test_progs.h
++++ b/tools/testing/selftests/bpf/test_progs.h
+@@ -413,6 +413,10 @@ int write_sysctl(const char *sysctl, const char *value);
+ int get_bpf_max_tramp_links_from(struct btf *btf);
+ int get_bpf_max_tramp_links(void);
+ 
++struct netns_obj;
++struct netns_obj *netns_new(const char *name, bool open);
++void netns_free(struct netns_obj *netns);
++
+ #ifdef __x86_64__
+ #define SYS_NANOSLEEP_KPROBE_NAME "__x64_sys_nanosleep"
+ #elif defined(__s390x__)
+-- 
+2.52.0
+
