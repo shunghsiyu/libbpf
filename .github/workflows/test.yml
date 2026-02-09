@@ -19,7 +19,7 @@ jobs:
           - kernel: '6.18'
             runs_on: 'ubuntu-24.04'
             arch: 'x86_64'
-            llvm-version: '22'
+            llvm-version: '21'
             pahole: 'master'
           - kernel: '6.12'
             runs_on: 'ubuntu-24.04'
@@ -47,7 +47,7 @@ jobs:
           - kernel: 'LATEST'
             runs_on: 'ubuntu-24.04'
             arch: 'x86_64'
-            llvm-version: '22'
+            llvm-version: '23'
             pahole: 'master'
     name: Mainline Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
     uses: ./.github/workflows/vmtest-mainline.yml
