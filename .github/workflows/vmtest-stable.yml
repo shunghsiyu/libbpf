@@ -77,6 +77,14 @@ jobs:
           	fi
           done
 
+      - name: Patch kernel source (specific)
+        uses: libbpf/ci/patch-kernel@v3
+        # Only run when the kernel-specific directory exists
+        if: hashFiles(format('ci/diffs/{0}/**', inputs.kernel)) != ''
+        with:
+          patches-root: '${{ github.workspace }}/ci/diffs/${{ inputs.kernel }}/'
+          repo-root: '.kernel'
+
       - name: Patch kernel source
         uses: libbpf/ci/patch-kernel@v3
         with:
