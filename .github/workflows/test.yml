@@ -16,6 +16,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - kernel: '6.19'
+            runs_on: 'ubuntu-24.04'
+            arch: 'x86_64'
+            # Unfortunately as of 2026-02-24 LLVM newer than 21 cannot be
+            # install through apt.llvm.org/llvm.sh yet
+            llvm-version: '21'
+            pahole: 'master'
           - kernel: '6.18'
             runs_on: 'ubuntu-24.04'
             arch: 'x86_64'
@@ -47,6 +54,8 @@ jobs:
           - kernel: 'LATEST'
             runs_on: 'ubuntu-24.04'
             arch: 'x86_64'
+            # Unfortunately as of 2026-02-24 LLVM newer than 21 cannot be
+            # install through apt.llvm.org/llvm.sh yet
             llvm-version: '21'
             pahole: 'master'
     name: Mainline Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
