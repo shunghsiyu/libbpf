@@ -1,0 +1,40 @@
+From 997e1492e5d6d2640f75df8f7324646fce6e4dfc Mon Sep 17 00:00:00 2001
+From: "Bastien Curutchet (eBPF Foundation)" <bastien.curutchet@bootlin.com>
+Date: Wed, 19 Feb 2025 15:53:00 +0100
+Subject: [PATCH stable 6.12 1/5] selftests/bpf: ns_current_pid_tgid: Rename
+ the test function
+
+commit 4a06c5251ae341224e4010795a4db080857545fe upstream.
+
+Next patch will add a new feature to test_prog to run tests in a
+dedicated namespace if the test name starts with 'ns_'. Here the test
+name already starts with 'ns_' and creates some namespaces which would
+conflict with the new feature.
+
+Rename the test to avoid this conflict.
+
+Signed-off-by: Bastien Curutchet (eBPF Foundation) <bastien.curutchet@bootlin.com>
+Link: https://lore.kernel.org/r/20250219-b4-tc_links-v2-1-14504db136b7@bootlin.com
+Signed-off-by: Alexei Starovoitov <ast@kernel.org>
+Stable-dep-of: 6cc73f35406c ("selftests/bpf: Test bpf_skb_check_mtu(BPF_MTU_CHK_SEGS) when transport_header is not set")
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ tools/testing/selftests/bpf/prog_tests/ns_current_pid_tgid.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/ns_current_pid_tgid.c b/tools/testing/selftests/bpf/prog_tests/ns_current_pid_tgid.c
+index 761ce24bce38..78020ece6a29 100644
+--- a/tools/testing/selftests/bpf/prog_tests/ns_current_pid_tgid.c
++++ b/tools/testing/selftests/bpf/prog_tests/ns_current_pid_tgid.c
+@@ -220,7 +220,7 @@ static void test_in_netns(int (*fn)(void *), void *arg)
+ }
+ 
+ /* TODO: use a different tracepoint */
+-void serial_test_ns_current_pid_tgid(void)
++void serial_test_current_pid_tgid(void)
+ {
+ 	if (test__start_subtest("root_ns_tp"))
+ 		test_current_pid_tgid_tp(NULL);
+-- 
+2.53.0
+

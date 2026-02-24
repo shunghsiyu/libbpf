@@ -1,0 +1,51 @@
+From 2327bb79bb0153c5271b6538c04e70b25d99cc67 Mon Sep 17 00:00:00 2001
+From: Kui-Feng Lee <thinker.li@gmail.com>
+Date: Wed, 14 Aug 2024 22:32:53 -0700
+Subject: [PATCH stable 6.6 05/11] selftests/bpf: Monitor traffic for
+ sockmap_listen.
+
+commit b407b52b18505a7c09a77cbab022ec6cf82dc5f0 upstream.
+
+Enable traffic monitor for each subtest of sockmap_listen.
+
+Acked-by: Stanislav Fomichev <sdf@fomichev.me>
+Signed-off-by: Kui-Feng Lee <thinker.li@gmail.com>
+Link: https://lore.kernel.org/r/20240815053254.470944-6-thinker.li@gmail.com
+Signed-off-by: Martin KaFai Lau <martin.lau@kernel.org>
+Stable-dep-of: c047e0e0e435 ("selftests/bpf: Optionally open a dedicated namespace to run test in it")
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ tools/testing/selftests/bpf/prog_tests/sockmap_listen.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/sockmap_listen.c b/tools/testing/selftests/bpf/prog_tests/sockmap_listen.c
+index a6d8aa8c2a9a..85654b480aef 100644
+--- a/tools/testing/selftests/bpf/prog_tests/sockmap_listen.c
++++ b/tools/testing/selftests/bpf/prog_tests/sockmap_listen.c
+@@ -1910,6 +1910,7 @@ static void test_udp_unix_redir(struct test_sockmap_listen *skel, struct bpf_map
+ 				int family)
+ {
+ 	const char *family_name, *map_name;
++	struct netns_obj *netns;
+ 	char s[MAX_TEST_NAME];
+ 
+ 	family_name = family_str(family);
+@@ -1917,8 +1918,15 @@ static void test_udp_unix_redir(struct test_sockmap_listen *skel, struct bpf_map
+ 	snprintf(s, sizeof(s), "%s %s %s", map_name, family_name, __func__);
+ 	if (!test__start_subtest(s))
+ 		return;
++
++	netns = netns_new("sockmap_listen", true);
++	if (!ASSERT_OK_PTR(netns, "netns_new"))
++		return;
++
+ 	inet_unix_skb_redir_to_connected(skel, map, family);
+ 	unix_inet_skb_redir_to_connected(skel, map, family);
++
++	netns_free(netns);
+ }
+ 
+ static void run_tests(struct test_sockmap_listen *skel, struct bpf_map *map,
+-- 
+2.53.0
+

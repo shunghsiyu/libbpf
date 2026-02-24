@@ -1,0 +1,47 @@
+From f1db4e534660a3877878a0a76ac3511aa591c06b Mon Sep 17 00:00:00 2001
+From: Eduard Zingerman <eddyz87@gmail.com>
+Date: Fri, 23 Aug 2024 12:44:09 -0700
+Subject: [PATCH stable 6.6 07/11] selftests/bpf: use simply-expanded variables
+ for libpcap flags
+
+commit 5772c3458bb8d17d763e0f411e1bae1bf4eda88d upstream.
+
+Save pkg-config output for libpcap as simply-expanded variables.
+For an obscure reason 'shell' call in LDLIBS/CFLAGS recursively
+expanded variables makes *.test.o files compilation non-parallel
+when make is executed with -j option.
+
+While at it, reuse 'pkg-config --cflags' call to define
+-DTRAFFIC_MONITOR=1 option, it's exit status is the same as for
+'pkg-config --exists'.
+
+Fixes: f52403b6bfea ("selftests/bpf: Add traffic monitor functions.")
+Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
+Link: https://lore.kernel.org/r/20240823194409.774815-1-eddyz87@gmail.com
+Signed-off-by: Martin KaFai Lau <martin.lau@kernel.org>
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ tools/testing/selftests/bpf/Makefile | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/tools/testing/selftests/bpf/Makefile b/tools/testing/selftests/bpf/Makefile
+index 2eeb51b13249..9d652cd3f494 100644
+--- a/tools/testing/selftests/bpf/Makefile
++++ b/tools/testing/selftests/bpf/Makefile
+@@ -33,9 +33,10 @@ CFLAGS += -g -O0 -rdynamic -Wall -Werror $(GENFLAGS) $(SAN_CFLAGS)	\
+ LDFLAGS += $(SAN_LDFLAGS)
+ LDLIBS += -lelf -lz -lrt -lpthread
+ 
+-LDLIBS += $(shell $(PKG_CONFIG) --libs libpcap 2>/dev/null)
+-CFLAGS += $(shell $(PKG_CONFIG) --cflags libpcap 2>/dev/null)
+-CFLAGS += $(shell $(PKG_CONFIG) --exists libpcap 2>/dev/null && echo "-DTRAFFIC_MONITOR=1")
++PCAP_CFLAGS	:= $(shell $(PKG_CONFIG) --cflags libpcap 2>/dev/null && echo "-DTRAFFIC_MONITOR=1")
++PCAP_LIBS	:= $(shell $(PKG_CONFIG) --libs libpcap 2>/dev/null)
++LDLIBS += $(PCAP_LIBS)
++CFLAGS += $(PCAP_CFLAGS)
+ 
+ ifneq ($(LLVM),)
+ # Silence some warnings when compiled with clang
+-- 
+2.53.0
+

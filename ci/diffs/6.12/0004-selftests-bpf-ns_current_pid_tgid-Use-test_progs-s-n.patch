@@ -1,0 +1,89 @@
+From ee67af2acad70450eb2c1803c99921bf43dcc3f6 Mon Sep 17 00:00:00 2001
+From: "Bastien Curutchet (eBPF Foundation)" <bastien.curutchet@bootlin.com>
+Date: Wed, 19 Feb 2025 15:53:03 +0100
+Subject: [PATCH stable 6.12 4/5] selftests/bpf: ns_current_pid_tgid: Use
+ test_progs's ns_ feature
+
+commit 157feaaf18cec6a6eeb71dba334e214834a21030 upstream.
+
+Two subtests use the test_in_netns() function to run the test in a
+dedicated network namespace. This can now be done directly through the
+test_progs framework with a test name starting with 'ns_'.
+
+Replace the use of test_in_netns() by test_ns_* calls.
+
+Signed-off-by: Bastien Curutchet (eBPF Foundation) <bastien.curutchet@bootlin.com>
+Link: https://lore.kernel.org/r/20250219-b4-tc_links-v2-4-14504db136b7@bootlin.com
+Signed-off-by: Alexei Starovoitov <ast@kernel.org>
+Stable-dep-of: 6cc73f35406c ("selftests/bpf: Test bpf_skb_check_mtu(BPF_MTU_CHK_SEGS) when transport_header is not set")
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ .../bpf/prog_tests/ns_current_pid_tgid.c      | 47 +++++++------------
+ 1 file changed, 17 insertions(+), 30 deletions(-)
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/ns_current_pid_tgid.c b/tools/testing/selftests/bpf/prog_tests/ns_current_pid_tgid.c
+index 78020ece6a29..99c953f2be21 100644
+--- a/tools/testing/selftests/bpf/prog_tests/ns_current_pid_tgid.c
++++ b/tools/testing/selftests/bpf/prog_tests/ns_current_pid_tgid.c
+@@ -200,25 +200,6 @@ static void test_ns_current_pid_tgid_new_ns(int (*fn)(void *), void *arg)
+ 		return;
+ }
+ 
+-static void test_in_netns(int (*fn)(void *), void *arg)
+-{
+-	struct nstoken *nstoken = NULL;
+-
+-	SYS(cleanup, "ip netns add ns_current_pid_tgid");
+-	SYS(cleanup, "ip -net ns_current_pid_tgid link set dev lo up");
+-
+-	nstoken = open_netns("ns_current_pid_tgid");
+-	if (!ASSERT_OK_PTR(nstoken, "open_netns"))
+-		goto cleanup;
+-
+-	test_ns_current_pid_tgid_new_ns(fn, arg);
+-
+-cleanup:
+-	if (nstoken)
+-		close_netns(nstoken);
+-	SYS_NOFAIL("ip netns del ns_current_pid_tgid");
+-}
+-
+ /* TODO: use a different tracepoint */
+ void serial_test_current_pid_tgid(void)
+ {
+@@ -226,15 +207,21 @@ void serial_test_current_pid_tgid(void)
+ 		test_current_pid_tgid_tp(NULL);
+ 	if (test__start_subtest("new_ns_tp"))
+ 		test_ns_current_pid_tgid_new_ns(test_current_pid_tgid_tp, NULL);
+-	if (test__start_subtest("new_ns_cgrp")) {
+-		int cgroup_fd = -1;
+-
+-		cgroup_fd = test__join_cgroup("/sock_addr");
+-		if (ASSERT_GE(cgroup_fd, 0, "join_cgroup")) {
+-			test_in_netns(test_current_pid_tgid_cgrp, &cgroup_fd);
+-			close(cgroup_fd);
+-		}
+-	}
+-	if (test__start_subtest("new_ns_sk_msg"))
+-		test_in_netns(test_current_pid_tgid_sk_msg, NULL);
+ }
++
++void test_ns_current_pid_tgid_cgrp(void)
++{
++	int cgroup_fd = test__join_cgroup("/sock_addr");
++
++	if (ASSERT_OK_FD(cgroup_fd, "join_cgroup")) {
++		test_ns_current_pid_tgid_new_ns(test_current_pid_tgid_cgrp, &cgroup_fd);
++		close(cgroup_fd);
++	}
++}
++
++void test_ns_current_pid_tgid_sk_msg(void)
++{
++	test_ns_current_pid_tgid_new_ns(test_current_pid_tgid_sk_msg, NULL);
++}
++
++
+-- 
+2.53.0
+
