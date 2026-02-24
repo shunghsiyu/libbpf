@@ -13,7 +13,3 @@ lwt_reroute # crashes kernel, fix pending upstream
 tc_links_ingress # fails, same fix is pending upstream
 tc_redirect		  # enough is enough, banned for life for flakiness
 verif_scale_pyperf600 # failing since LLVM 18+
-
-# https://lore.kernel.org/bpf/djwjf2vfb7gro3rfag666bojod6ytcectahnb5z6hx2hawimtj@sx47ghzjg4lw/
-map_kptr
-test_profiler
