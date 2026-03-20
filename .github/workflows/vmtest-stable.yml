@@ -121,6 +121,15 @@ jobs:
           kernel-root: ${{ github.workspace }}/.kernel
           llvm-version: ${{ inputs.llvm-version }}
 
+      - name: Build veristat
+        shell: bash
+        run: |
+          make -C .kernel/tools/bpf/veristat/ \
+            CLANG=clang-${{ inputs.llvm-version }} \
+            -j $((4*$(nproc)))
+          cp .kernel/tools/bpf/veristat/veristat \
+            .kernel/tools/testing/selftests/bpf/
+
       - name: Run selftests
         env:
           ALLOWLIST_FILE: /tmp/allowlist
@@ -136,3 +145,18 @@ jobs:
           kbuild-output: ${{ github.workspace }}/.kernel
           kernel-root: ${{ github.workspace }}/.kernel
           vmlinuz: ${{ inputs.arch }}/vmlinuz-${{ inputs.kernel }}
+
+      - name: Run veristat
+        env:
+          KERNEL: ${{ inputs.kernel }}
+          VERISTAT_TARGET: kernel
+          SELFTESTS_BPF: ${{ github.workspace }}/.kernel/tools/testing/selftests/bpf
+          VMTEST_CONFIGS: ${{ github.workspace }}/ci/vmtest/configs
+        uses: libbpf/ci/run-vmtest@v4
+        with:
+          arch: ${{ inputs.arch }}
+          kbuild-output: ${{ github.workspace }}/.kernel
+          kernel-root: ${{ github.workspace }}/.kernel
+          vmlinuz: ${{ github.workspace }}/${{ inputs.arch }}/vmlinuz-${{ inputs.kernel }}
+          kernel-test: run_veristat
+          output-dir: ${{ github.workspace }}
