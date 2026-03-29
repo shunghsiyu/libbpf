@@ -56,10 +56,11 @@ jobs:
           - kernel: 'LATEST'
             runs_on: 'ubuntu-24.04'
             arch: 'x86_64'
-            # LLVM 22 packages were never published on apt.llvm.org for Ubuntu
-            # Noble (24.04) — the Packages file is empty (llvm-project#183715).
-            # Use LLVM 23 (the active dev snapshot, last updated 2026-03-26).
-            llvm-version: '23'
+            # LLVM 22 packages were broken on apt.llvm.org for Ubuntu Noble
+            # (24.04) — the Packages file was empty (llvm-project#183715).
+            # That issue is now closed and LLVM 22.1.x has been officially
+            # released; use it for mainline testing.
+            llvm-version: '22'
             pahole: 'master'
     name: Mainline Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
     uses: ./.github/workflows/vmtest-mainline.yml
