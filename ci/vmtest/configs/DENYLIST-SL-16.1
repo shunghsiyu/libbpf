@@ -1,1 +1,5 @@
 verif_scale_pyperf600 # failing since LLVM 18+
+verifier_subreg/arsh_31_and # arsh subreg bounds; fixes: bffacdb80b93 + d18dec4b8990 (in 6.19 queue, not SL-16.1)
+verifier_subreg/arsh_63_and # same
+verifier_subreg/arsh_31_or  # same
+verifier_subreg/arsh_63_or  # same

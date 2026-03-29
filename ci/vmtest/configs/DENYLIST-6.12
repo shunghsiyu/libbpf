@@ -1,0 +1,2 @@
+reg_bounds_crafted # verifier u32/s32 sign-boundary range bug; fix: fbc7aef517d8 (not yet in 6.12 stable)
+reg_bounds_rand_consts_s64_u64 # same bug as reg_bounds_crafted
