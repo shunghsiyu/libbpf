@@ -13,3 +13,4 @@ lwt_reroute # crashes kernel, fix pending upstream
 tc_links_ingress # fails, same fix is pending upstream
 tc_redirect		  # enough is enough, banned for life for flakiness
 verif_scale_pyperf600 # failing since LLVM 18+
+verifier_linked_scalars/alu32_negative_offset # verifier linked-scalar regression with LLVM 22, under investigation

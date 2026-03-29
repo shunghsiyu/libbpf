@@ -1,0 +1,2 @@
+reg_bounds_crafted # verifier s64/u64 sign-boundary range regression in 6.12 stable, under investigation
+reg_bounds_rand_consts_s64_u64 # same verifier regression as reg_bounds_crafted
