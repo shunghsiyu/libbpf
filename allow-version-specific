@@ -20,10 +20,10 @@ Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
  1 file changed, 8 insertions(+)
 
 diff --git a/.github/workflows/vmtest-stable.yml b/.github/workflows/vmtest-stable.yml
-index bdbdbe0..f9e151b 100644
+index b917312..7fd170a 100644
 --- a/.github/workflows/vmtest-stable.yml
 +++ b/.github/workflows/vmtest-stable.yml
-@@ -77,6 +77,14 @@ jobs:
+@@ -80,6 +80,14 @@ jobs:
            	fi
            done
  
@@ -36,5 +36,5 @@ index bdbdbe0..f9e151b 100644
 +          repo-root: '.kernel'
 +
        - name: Patch kernel source
-         uses: libbpf/ci/patch-kernel@v3
+         uses: libbpf/ci/patch-kernel@v4
          with:

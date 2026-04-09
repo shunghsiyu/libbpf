@@ -28,10 +28,10 @@ Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
  delete mode 100644 ci/diffs/0014-selftests-bpf-extend-changes_pkt_data-with-cases-w-o.patch
 
 diff --git a/.github/workflows/vmtest.yml b/.github/workflows/vmtest.yml
-index 6f43a23..f3b4df4 100644
+index cd2337a..05eabf2 100644
 --- a/.github/workflows/vmtest.yml
 +++ b/.github/workflows/vmtest.yml
-@@ -49,6 +49,26 @@ jobs:
+@@ -47,6 +47,26 @@ jobs:
            rev: 'linux-6.12.y'
            dest: '${{ github.workspace }}/.kernel'
  
@@ -56,7 +56,7 @@ index 6f43a23..f3b4df4 100644
 +          done
 +
        - name: Patch kernel source
-         uses: libbpf/ci/patch-kernel@v3
+         uses: libbpf/ci/patch-kernel@v4
          with:
 diff --git a/ci/diffs/0001-selftests-bpf-Fix-raw_tp-null-handling-test.patch b/ci/diffs/0001-selftests-bpf-Fix-raw_tp-null-handling-test.patch
 deleted file mode 100644

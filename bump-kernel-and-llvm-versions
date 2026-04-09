@@ -8,31 +8,27 @@ Ihor).
 
 Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 ---
- .github/workflows/test.yml |   13 +++++++++----
- 1 file changed, 9 insertions(+), 4 deletions(-)
+ .github/workflows/test.yml |   11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
 
 diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
-index 03e3227..5d8e364 100644
+index fbf75f7..b66b845 100644
 --- a/.github/workflows/test.yml
 +++ b/.github/workflows/test.yml
-@@ -16,10 +16,15 @@ jobs:
+@@ -16,7 +16,12 @@ jobs:
        fail-fast: false
        matrix:
          include:
 -          - kernel: '6.16'
 +          - kernel: '6.18'
-             runs_on: 'ubuntu-24.04'
-             arch: 'x86_64'
--            llvm-version: '18'
++            runs_on: 'ubuntu-24.04'
++            arch: 'x86_64'
 +            llvm-version: '22'
 +            pahole: 'master'
 +          - kernel: '6.17'
-+            runs_on: 'ubuntu-24.04'
-+            arch: 'x86_64'
-+            llvm-version: '21'
-             pahole: 'master'
-           - kernel: '6.12'
              runs_on: 'ubuntu-24.04'
+             arch: 'x86_64'
+             llvm-version: '21'
 @@ -44,10 +49,10 @@ jobs:
        fail-fast: false
        matrix:

@@ -11,7 +11,7 @@ Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
-index 2709b1c..1754d3d 100644
+index 5ac44b4..5b31fd2 100644
 --- a/.github/workflows/test.yml
 +++ b/.github/workflows/test.yml
 @@ -44,7 +44,7 @@ jobs:

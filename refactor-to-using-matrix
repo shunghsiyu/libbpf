@@ -8,13 +8,13 @@ Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
  1 file changed, 8 insertions(+), 4 deletions(-)
 
 diff --git a/.github/workflows/vmtest.yml b/.github/workflows/vmtest.yml
-index f3b4df4..91a421e 100644
+index 05eabf2..7f90461 100644
 --- a/.github/workflows/vmtest.yml
 +++ b/.github/workflows/vmtest.yml
-@@ -31,6 +31,10 @@ jobs:
-   vmtest:
-     name: pahole@${{ inputs.pahole }}
-     runs-on: ${{ inputs.runs_on }}
+@@ -29,6 +29,10 @@ jobs:
+     container:
+       image: ghcr.io/kernel-patches/runner:kbuilder-debian-x86_64
+       options: --privileged
 +    strategy:
 +      matrix:
 +        target:
@@ -22,7 +22,7 @@ index f3b4df4..91a421e 100644
      steps:
  
        - uses: actions/checkout@v4
-@@ -46,7 +50,7 @@ jobs:
+@@ -44,7 +48,7 @@ jobs:
          uses: shunghsiyu/libbpf-ci/get-linux-source@v3
          with:
            repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git'
@@ -31,7 +31,7 @@ index f3b4df4..91a421e 100644
            dest: '${{ github.workspace }}/.kernel'
  
        - name: Get queued stable patches
-@@ -60,9 +64,9 @@ jobs:
+@@ -58,9 +62,9 @@ jobs:
          run: |
            set -eEuxo pipefail
            cd '${{ github.workspace }}/.kernel'

@@ -10,7 +10,7 @@ Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
  1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
-index dc50b15..03e3227 100644
+index 847e94a..fbf75f7 100644
 --- a/.github/workflows/test.yml
 +++ b/.github/workflows/test.yml
 @@ -16,7 +16,7 @@ jobs:
@@ -21,7 +21,7 @@ index dc50b15..03e3227 100644
 +          - kernel: '6.16'
              runs_on: 'ubuntu-24.04'
              arch: 'x86_64'
-             llvm-version: '18'
+             llvm-version: '21'
 @@ -44,7 +44,7 @@ jobs:
        fail-fast: false
        matrix:

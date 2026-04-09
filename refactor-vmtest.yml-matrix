@@ -6,23 +6,23 @@ This will make the target branch more obvious in the job name.
 
 Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 ---
- .github/workflows/test.yml   |    9 +++++++--
- .github/workflows/vmtest.yml |   24 +++++-------------------
- 2 files changed, 12 insertions(+), 21 deletions(-)
+ .github/workflows/test.yml   |   10 ++++++++--
+ .github/workflows/vmtest.yml |   16 ++++++----------
+ 2 files changed, 14 insertions(+), 12 deletions(-)
 
 diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
-index 1e84c30..565c3c0 100644
+index 7b3067a..423e02c 100644
 --- a/.github/workflows/test.yml
 +++ b/.github/workflows/test.yml
-@@ -16,12 +16,17 @@ jobs:
+@@ -16,11 +16,17 @@ jobs:
        fail-fast: false
        matrix:
          include:
--          - kernel: 'LATEST'
+-          - runs_on: 'ubuntu-24.04'
 +          - kernel: '6.14'
-             runs_on: 'ubuntu-24.04'
++            runs_on: 'ubuntu-24.04'
              arch: 'x86_64'
-             llvm-version: '18'
+             llvm-version: '21'
              pahole: 'master'
 -    name: Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
 +          - kernel: '6.12'
@@ -35,13 +35,13 @@ index 1e84c30..565c3c0 100644
      with:
        runs_on: ${{ matrix.runs_on }}
 diff --git a/.github/workflows/vmtest.yml b/.github/workflows/vmtest.yml
-index 23a3bcc..48c0951 100644
+index 0f39ade..e8bc4bf 100644
 --- a/.github/workflows/vmtest.yml
 +++ b/.github/workflows/vmtest.yml
-@@ -31,11 +31,6 @@ jobs:
-   vmtest:
-     name: pahole@${{ inputs.pahole }}
-     runs-on: ${{ inputs.runs_on }}
+@@ -29,11 +29,6 @@ jobs:
+     container:
+       image: ghcr.io/kernel-patches/runner:kbuilder-debian-x86_64
+       options: --privileged
 -    strategy:
 -      matrix:
 -        target:
@@ -50,7 +50,7 @@ index 23a3bcc..48c0951 100644
      steps:
  
        - uses: actions/checkout@v4
-@@ -51,7 +46,7 @@ jobs:
+@@ -49,7 +44,7 @@ jobs:
          uses: shunghsiyu/libbpf-ci/get-linux-source@v3
          with:
            repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git'
@@ -59,7 +59,7 @@ index 23a3bcc..48c0951 100644
            dest: '${{ github.workspace }}/.kernel'
  
        - name: Get queued stable patches
-@@ -65,9 +60,9 @@ jobs:
+@@ -63,9 +58,9 @@ jobs:
          run: |
            set -eEuxo pipefail
            cd '${{ github.workspace }}/.kernel'
@@ -72,37 +72,17 @@ index 23a3bcc..48c0951 100644
            		echo "Successfully applied ${file}!"
            	else
            		echo "Failed to apply ${file}, skipping!"
-@@ -92,7 +87,6 @@ jobs:
-           cd -
- 
-       - name: Build kernel image
--        if: ${{ inputs.kernel == 'LATEST' }}
-         shell: bash
-         run: |
-           cd .kernel
-@@ -100,19 +94,12 @@ jobs:
-           cp vmlinux ${{ github.workspace }}
-           cd -
- 
--      - name: Download prebuilt kernel
--        if: ${{ inputs.kernel != 'LATEST' }}
--        uses: libbpf/ci/download-vmlinux@v3
--        with:
--          kernel: ${{ inputs.kernel }}
--          arch: ${{ inputs.arch }}
--
-       - name: Build selftests/bpf
-         uses: libbpf/ci/build-selftests@v3
+@@ -102,6 +97,7 @@ jobs:
          env:
            MAX_MAKE_JOBS: 32
            VMLINUX_BTF: ${{ github.workspace }}/vmlinux
--          VMLINUX_H: ${{ inputs.kernel != 'LATEST' && format('{0}/.github/actions/build-selftests/vmlinux.h', github.workspace) || '' }}
 +          VMLINUX_H: ''
          with:
            arch: ${{ inputs.arch }}
            kernel-root: ${{ github.workspace }}/.kernel
-@@ -133,4 +120,3 @@ jobs:
+@@ -120,4 +116,4 @@ jobs:
+           arch: ${{ inputs.arch }}
            kbuild-output: ${{ github.workspace }}/.kernel
            kernel-root: ${{ github.workspace }}/.kernel
-           vmlinuz: ${{ inputs.arch }}/vmlinuz-${{ inputs.kernel }}
 -
++          vmlinuz: ${{ inputs.arch }}/vmlinuz-${{ inputs.kernel }}

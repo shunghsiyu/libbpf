@@ -6,15 +6,15 @@ This pave the way for adding daily testing of SLES kernels.
 
 Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 ---
- .github/workflows/test.yml          |    4 +
- .github/workflows/vmtest-stable.yml |  130 +++++++++++++++++++++++++++++++++++
- .github/workflows/vmtest.yml        |  130 -----------------------------------
- 3 files changed, 132 insertions(+), 132 deletions(-)
+ .github/workflows/test.yml          |    5 +
+ .github/workflows/vmtest-stable.yml |  133 +++++++++++++++++++++++++++++++++++
+ .github/workflows/vmtest.yml        |  127 ---------------------------------
+ 3 files changed, 136 insertions(+), 129 deletions(-)
  create mode 100644 .github/workflows/vmtest-stable.yml
  delete mode 100644 .github/workflows/vmtest.yml
 
 diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
-index 565c3c0..a65a10f 100644
+index 423e02c..81e29d0 100644
 --- a/.github/workflows/test.yml
 +++ b/.github/workflows/test.yml
 @@ -11,7 +11,7 @@ concurrency:
@@ -26,7 +26,7 @@ index 565c3c0..a65a10f 100644
      strategy:
        fail-fast: false
        matrix:
-@@ -27,7 +27,7 @@ jobs:
+@@ -27,9 +27,10 @@ jobs:
              llvm-version: '18'
              pahole: 'master'
      name: Stable Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
@@ -34,13 +34,16 @@ index 565c3c0..a65a10f 100644
 +    uses: ./.github/workflows/vmtest-stable.yml
      with:
        runs_on: ${{ matrix.runs_on }}
-       kernel: ${{ matrix.kernel }}
++      kernel: ${{ matrix.kernel }}
+       arch: ${{ matrix.arch }}
+       llvm-version: ${{ matrix.llvm-version }}
+       pahole: ${{ matrix.pahole }}
 diff --git a/.github/workflows/vmtest-stable.yml b/.github/workflows/vmtest-stable.yml
 new file mode 100644
-index 0000000..bdbdbe0
+index 0000000..b917312
 --- /dev/null
 +++ b/.github/workflows/vmtest-stable.yml
-@@ -0,0 +1,130 @@
+@@ -0,0 +1,133 @@
 +name: 'Build kernel and selftests/bpf, run selftests via vmtest'
 +
 +on:
@@ -74,12 +77,15 @@ index 0000000..bdbdbe0
 +  vmtest:
 +    name: pahole@${{ inputs.pahole }}
 +    runs-on: ${{ inputs.runs_on }}
++    container:
++      image: ghcr.io/kernel-patches/runner:kbuilder-debian-x86_64
++      options: --privileged
 +    steps:
 +
 +      - uses: actions/checkout@v4
 +
 +      - name: Setup environment
-+        uses: libbpf/ci/setup-build-env@v3
++        uses: libbpf/ci/setup-build-env@v4
 +        with:
 +          pahole: ${{ inputs.pahole }}
 +          arch: ${{ inputs.arch }}
@@ -121,7 +127,7 @@ index 0000000..bdbdbe0
 +          done
 +
 +      - name: Patch kernel source
-+        uses: libbpf/ci/patch-kernel@v3
++        uses: libbpf/ci/patch-kernel@v4
 +        with:
 +          patches-root: '${{ github.workspace }}/ci/diffs'
 +          repo-root: '.kernel'
@@ -142,11 +148,11 @@ index 0000000..bdbdbe0
 +        run: |
 +          cd .kernel
 +          make -j $((4*$(nproc))) all
-+          cp vmlinux ${{ github.workspace }}
++          cp vmlinux $GITHUB_WORKSPACE
 +          cd -
 +
 +      - name: Build selftests/bpf
-+        uses: libbpf/ci/build-selftests@v3
++        uses: libbpf/ci/build-selftests@v4
 +        env:
 +          MAX_MAKE_JOBS: 32
 +          VMLINUX_BTF: ${{ github.workspace }}/vmlinux
@@ -165,7 +171,7 @@ index 0000000..bdbdbe0
 +          LLVM_VERSION: ${{ inputs.llvm-version }}
 +          SELFTESTS_BPF: ${{ github.workspace }}/.kernel/tools/testing/selftests/bpf
 +          VMTEST_CONFIGS: ${{ github.workspace }}/ci/vmtest/configs
-+        uses: libbpf/ci/run-vmtest@v3
++        uses: libbpf/ci/run-vmtest@v4
 +        with:
 +          arch: ${{ inputs.arch }}
 +          kbuild-output: ${{ github.workspace }}/.kernel
@@ -173,10 +179,10 @@ index 0000000..bdbdbe0
 +          vmlinuz: ${{ inputs.arch }}/vmlinuz-${{ inputs.kernel }}
 diff --git a/.github/workflows/vmtest.yml b/.github/workflows/vmtest.yml
 deleted file mode 100644
-index bdbdbe0..0000000
+index 7c50e08..0000000
 --- a/.github/workflows/vmtest.yml
 +++ /dev/null
-@@ -1,130 +0,0 @@
+@@ -1,127 +0,0 @@
 -name: 'Build kernel and selftests/bpf, run selftests via vmtest'
 -
 -on:
@@ -190,11 +196,6 @@ index bdbdbe0..0000000
 -        description: 'what arch to test'
 -        required: true
 -        default: 'x86_64'
--        type: string
--      kernel:
--        description: 'kernel version or LATEST'
--        required: true
--        default: 'LATEST'
 -        type: string
 -      pahole:
 -        description: 'pahole rev or branch'
@@ -210,12 +211,15 @@ index bdbdbe0..0000000
 -  vmtest:
 -    name: pahole@${{ inputs.pahole }}
 -    runs-on: ${{ inputs.runs_on }}
+-    container:
+-      image: ghcr.io/kernel-patches/runner:kbuilder-debian-x86_64
+-      options: --privileged
 -    steps:
 -
 -      - uses: actions/checkout@v4
 -
 -      - name: Setup environment
--        uses: libbpf/ci/setup-build-env@v3
+-        uses: libbpf/ci/setup-build-env@v4
 -        with:
 -          pahole: ${{ inputs.pahole }}
 -          arch: ${{ inputs.arch }}
@@ -257,7 +261,7 @@ index bdbdbe0..0000000
 -          done
 -
 -      - name: Patch kernel source
--        uses: libbpf/ci/patch-kernel@v3
+-        uses: libbpf/ci/patch-kernel@v4
 -        with:
 -          patches-root: '${{ github.workspace }}/ci/diffs'
 -          repo-root: '.kernel'
@@ -278,11 +282,11 @@ index bdbdbe0..0000000
 -        run: |
 -          cd .kernel
 -          make -j $((4*$(nproc))) all
--          cp vmlinux ${{ github.workspace }}
+-          cp vmlinux $GITHUB_WORKSPACE
 -          cd -
 -
 -      - name: Build selftests/bpf
--        uses: libbpf/ci/build-selftests@v3
+-        uses: libbpf/ci/build-selftests@v4
 -        env:
 -          MAX_MAKE_JOBS: 32
 -          VMLINUX_BTF: ${{ github.workspace }}/vmlinux
@@ -296,12 +300,11 @@ index bdbdbe0..0000000
 -        env:
 -          ALLOWLIST_FILE: /tmp/allowlist
 -          DENYLIST_FILE: /tmp/denylist
--          KERNEL: ${{ inputs.kernel }}
 -          VMLINUX: ${{ github.workspace }}/vmlinux
 -          LLVM_VERSION: ${{ inputs.llvm-version }}
 -          SELFTESTS_BPF: ${{ github.workspace }}/.kernel/tools/testing/selftests/bpf
 -          VMTEST_CONFIGS: ${{ github.workspace }}/ci/vmtest/configs
--        uses: libbpf/ci/run-vmtest@v3
+-        uses: libbpf/ci/run-vmtest@v4
 -        with:
 -          arch: ${{ inputs.arch }}
 -          kbuild-output: ${{ github.workspace }}/.kernel

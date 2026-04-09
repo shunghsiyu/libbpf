@@ -9,28 +9,24 @@ it when the LLVM version used is newer than 17.
 Link: https://lore.kernel.org/all/Zsxd9HskofXttp+p@kodidev-ubuntu/
 Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 ---
- ci/vmtest/configs/DENYLIST-6.18   |    1 +
- ci/vmtest/configs/DENYLIST-latest |    2 ++
- 2 files changed, 3 insertions(+)
+ ci/vmtest/configs/DENYLIST      |    1 +
+ ci/vmtest/configs/DENYLIST-6.18 |    1 +
+ 2 files changed, 2 insertions(+)
  create mode 100644 ci/vmtest/configs/DENYLIST-6.18
 
+diff --git a/ci/vmtest/configs/DENYLIST b/ci/vmtest/configs/DENYLIST
+index ef891b2..086ff9c 100644
+--- a/ci/vmtest/configs/DENYLIST
++++ b/ci/vmtest/configs/DENYLIST
+@@ -16,3 +16,4 @@ map_kptr                  # kprobe rcu_tasks_trace_postgp not available in VM ke
+ test_profiler             # kretprobe do_filp_open not available in VM kernel
+ sockmap_basic/sockmap udp multi channels  # flaky in CI
+ bpf_cookie/perf_event # flaky, needs investigation
++verif_scale_pyperf600 # failing since LLVM 18+
 diff --git a/ci/vmtest/configs/DENYLIST-6.18 b/ci/vmtest/configs/DENYLIST-6.18
 new file mode 100644
 index 0000000..94aca8e
 --- /dev/null
 +++ b/ci/vmtest/configs/DENYLIST-6.18
 @@ -0,0 +1 @@
-+verif_scale_pyperf600 # failing since LLVM 18+
-diff --git a/ci/vmtest/configs/DENYLIST-latest b/ci/vmtest/configs/DENYLIST-latest
-index e78d7f6..49d76ee 100644
---- a/ci/vmtest/configs/DENYLIST-latest
-+++ b/ci/vmtest/configs/DENYLIST-latest
-@@ -8,6 +8,8 @@ bpf_cookie/perf_event
- send_signal/send_signal_nmi
- send_signal/send_signal_nmi_thread
- 
-+
- lwt_reroute # crashes kernel, fix pending upstream
- tc_links_ingress # fails, same fix is pending upstream
- tc_redirect		  # enough is enough, banned for life for flakiness
 +verif_scale_pyperf600 # failing since LLVM 18+

@@ -18,7 +18,7 @@ Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
  create mode 100644 ci/diffs/0002-mm-vmalloc-Only-zero-init-on-vrealloc-shrink.patch
 
 diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
-index 3b01402..8b67c5e 100644
+index 1d7849d..374ea42 100644
 --- a/.github/workflows/test.yml
 +++ b/.github/workflows/test.yml
 @@ -34,6 +34,24 @@ jobs:

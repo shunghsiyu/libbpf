@@ -4,22 +4,19 @@ From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 
 
 ---
- .github/workflows/test.yml |    5 -----
- 1 file changed, 5 deletions(-)
+ .github/workflows/test.yml |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
-index 2d90150..1e84c30 100644
+index 94bd03f..7b3067a 100644
 --- a/.github/workflows/test.yml
 +++ b/.github/workflows/test.yml
-@@ -21,11 +21,6 @@ jobs:
+@@ -20,7 +20,7 @@ jobs:
              arch: 'x86_64'
-             llvm-version: '18'
+             llvm-version: '21'
              pahole: 'master'
--          - kernel: 'LATEST'
--            runs_on: 'ubuntu-24.04'
--            arch: 'x86_64'
--            llvm-version: '18'
--            pahole: 'tmp.master'
-     name: Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
+-    name: llvm-${{ matrix.llvm-version }}
++    name: Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
      uses: ./.github/workflows/vmtest.yml
      with:
+       runs_on: ${{ matrix.runs_on }}

@@ -8,10 +8,10 @@ From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/.github/workflows/vmtest.yml b/.github/workflows/vmtest.yml
-index d5cc9ed..6f43a23 100644
+index 7143622..cd2337a 100644
 --- a/.github/workflows/vmtest.yml
 +++ b/.github/workflows/vmtest.yml
-@@ -43,7 +43,7 @@ jobs:
+@@ -41,7 +41,7 @@ jobs:
            llvm-version: ${{ inputs.llvm-version }}
  
        - name: Get kernel source at checkpoint

@@ -1,6 +1,8 @@
-Rename DENYLIST-latest to DENYLIST-LATEST
+Rename DENYLIST(-latest) to DENYLIST-LATEST
 
 From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+Edit: DENYLIST-latest has been merged with DENYLIST after rebase
 
 Capitalization matters, and since we're using 'LATEST' instead of
 'latest' as the kernel variable (below), we should have the deny list
@@ -21,101 +23,59 @@ files named accordingly.
 
 Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 ---
- ci/vmtest/configs/DENYLIST-LATEST       |   15 +++++++++++++++
- ci/vmtest/configs/DENYLIST-LATEST.s390x |   17 +++++++++++++++++
- ci/vmtest/configs/DENYLIST-latest       |   15 ---------------
- ci/vmtest/configs/DENYLIST-latest.s390x |   17 -----------------
- 4 files changed, 32 insertions(+), 32 deletions(-)
+ ci/vmtest/configs/DENYLIST        |   19 -------------------
+ ci/vmtest/configs/DENYLIST-LATEST |   19 +++++++++++++++++++
+ 2 files changed, 19 insertions(+), 19 deletions(-)
+ delete mode 100644 ci/vmtest/configs/DENYLIST
  create mode 100644 ci/vmtest/configs/DENYLIST-LATEST
- create mode 100644 ci/vmtest/configs/DENYLIST-LATEST.s390x
- delete mode 100644 ci/vmtest/configs/DENYLIST-latest
- delete mode 100644 ci/vmtest/configs/DENYLIST-latest.s390x
 
-diff --git a/ci/vmtest/configs/DENYLIST-LATEST b/ci/vmtest/configs/DENYLIST-LATEST
-new file mode 100644
-index 0000000..49d76ee
---- /dev/null
-+++ b/ci/vmtest/configs/DENYLIST-LATEST
-@@ -0,0 +1,15 @@
-+decap_sanity  # weird failure with decap_sanity_ns netns already existing, TBD
-+empty_skb # waiting the fix in bpf tree to make it to bpf-next
-+bpf_nf/tc-bpf-ct # test consistently failing on x86: https://github.com/libbpf/libbpf/pull/698#issuecomment-1590341200
-+bpf_nf/xdp-ct   # test consistently failing on x86: https://github.com/libbpf/libbpf/pull/698#issuecomment-1590341200
-+kprobe_multi_bench_attach # suspected to cause crashes in CI
-+find_vma # test consistently fails on latest kernel, see https://github.com/libbpf/libbpf/issues/754 for details
-+bpf_cookie/perf_event
-+send_signal/send_signal_nmi
-+send_signal/send_signal_nmi_thread
-+
-+
-+lwt_reroute # crashes kernel, fix pending upstream
-+tc_links_ingress # fails, same fix is pending upstream
-+tc_redirect		  # enough is enough, banned for life for flakiness
-+verif_scale_pyperf600 # failing since LLVM 18+
-diff --git a/ci/vmtest/configs/DENYLIST-LATEST.s390x b/ci/vmtest/configs/DENYLIST-LATEST.s390x
-new file mode 100644
-index 0000000..4ab9c93
---- /dev/null
-+++ b/ci/vmtest/configs/DENYLIST-LATEST.s390x
-@@ -0,0 +1,17 @@
-+# TEMPORARY
-+sockmap_listen/sockhash VSOCK test_vsock_redir
-+usdt/basic                               # failing verifier due to bounds check after LLVM update
-+usdt/multispec                           # same as above
-+
-+deny_namespace                           # not yet in bpf denylist
-+tc_redirect/tc_redirect_dtime            # very flaky
-+lru_bug                                  # not yet in bpf-next denylist
-+
-+# Disabled temporarily for a crash.
-+# https://lore.kernel.org/bpf/c9923c1d-971d-4022-8dc8-1364e929d34c@gmail.com/
-+dummy_st_ops/dummy_init_ptr_arg
-+fexit_bpf2bpf
-+tailcalls
-+trace_ext
-+xdp_bpf2bpf
-+xdp_metadata
-diff --git a/ci/vmtest/configs/DENYLIST-latest b/ci/vmtest/configs/DENYLIST-latest
+diff --git a/ci/vmtest/configs/DENYLIST b/ci/vmtest/configs/DENYLIST
 deleted file mode 100644
-index 49d76ee..0000000
---- a/ci/vmtest/configs/DENYLIST-latest
+index 086ff9c..0000000
+--- a/ci/vmtest/configs/DENYLIST
 +++ /dev/null
-@@ -1,15 +0,0 @@
+@@ -1,19 +0,0 @@
+-# TEMPORARY
+-bpf_cookie/perf_event
+-kprobe_multi_bench_attach
+-verif_scale_pyperf600 # fails on newer Clangs
 -decap_sanity  # weird failure with decap_sanity_ns netns already existing, TBD
 -empty_skb # waiting the fix in bpf tree to make it to bpf-next
 -bpf_nf/tc-bpf-ct # test consistently failing on x86: https://github.com/libbpf/libbpf/pull/698#issuecomment-1590341200
 -bpf_nf/xdp-ct   # test consistently failing on x86: https://github.com/libbpf/libbpf/pull/698#issuecomment-1590341200
--kprobe_multi_bench_attach # suspected to cause crashes in CI
 -find_vma # test consistently fails on latest kernel, see https://github.com/libbpf/libbpf/issues/754 for details
--bpf_cookie/perf_event
 -send_signal/send_signal_nmi
 -send_signal/send_signal_nmi_thread
--
--
 -lwt_reroute # crashes kernel, fix pending upstream
 -tc_links_ingress # fails, same fix is pending upstream
 -tc_redirect		  # enough is enough, banned for life for flakiness
+-map_kptr                  # kprobe rcu_tasks_trace_postgp not available in VM kernel
+-test_profiler             # kretprobe do_filp_open not available in VM kernel
+-sockmap_basic/sockmap udp multi channels  # flaky in CI
+-bpf_cookie/perf_event # flaky, needs investigation
 -verif_scale_pyperf600 # failing since LLVM 18+
-diff --git a/ci/vmtest/configs/DENYLIST-latest.s390x b/ci/vmtest/configs/DENYLIST-latest.s390x
-deleted file mode 100644
-index 4ab9c93..0000000
---- a/ci/vmtest/configs/DENYLIST-latest.s390x
-+++ /dev/null
-@@ -1,17 +0,0 @@
--# TEMPORARY
--sockmap_listen/sockhash VSOCK test_vsock_redir
--usdt/basic                               # failing verifier due to bounds check after LLVM update
--usdt/multispec                           # same as above
--
--deny_namespace                           # not yet in bpf denylist
--tc_redirect/tc_redirect_dtime            # very flaky
--lru_bug                                  # not yet in bpf-next denylist
--
--# Disabled temporarily for a crash.
--# https://lore.kernel.org/bpf/c9923c1d-971d-4022-8dc8-1364e929d34c@gmail.com/
--dummy_st_ops/dummy_init_ptr_arg
--fexit_bpf2bpf
--tailcalls
--trace_ext
--xdp_bpf2bpf
--xdp_metadata
+diff --git a/ci/vmtest/configs/DENYLIST-LATEST b/ci/vmtest/configs/DENYLIST-LATEST
+new file mode 100644
+index 0000000..086ff9c
+--- /dev/null
++++ b/ci/vmtest/configs/DENYLIST-LATEST
+@@ -0,0 +1,19 @@
++# TEMPORARY
++bpf_cookie/perf_event
++kprobe_multi_bench_attach
++verif_scale_pyperf600 # fails on newer Clangs
++decap_sanity  # weird failure with decap_sanity_ns netns already existing, TBD
++empty_skb # waiting the fix in bpf tree to make it to bpf-next
++bpf_nf/tc-bpf-ct # test consistently failing on x86: https://github.com/libbpf/libbpf/pull/698#issuecomment-1590341200
++bpf_nf/xdp-ct   # test consistently failing on x86: https://github.com/libbpf/libbpf/pull/698#issuecomment-1590341200
++find_vma # test consistently fails on latest kernel, see https://github.com/libbpf/libbpf/issues/754 for details
++send_signal/send_signal_nmi
++send_signal/send_signal_nmi_thread
++lwt_reroute # crashes kernel, fix pending upstream
++tc_links_ingress # fails, same fix is pending upstream
++tc_redirect		  # enough is enough, banned for life for flakiness
++map_kptr                  # kprobe rcu_tasks_trace_postgp not available in VM kernel
++test_profiler             # kretprobe do_filp_open not available in VM kernel
++sockmap_basic/sockmap udp multi channels  # flaky in CI
++bpf_cookie/perf_event # flaky, needs investigation
++verif_scale_pyperf600 # failing since LLVM 18+

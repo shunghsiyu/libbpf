@@ -13,10 +13,10 @@ This is currently failing with the error
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/.github/workflows/vmtest.yml b/.github/workflows/vmtest.yml
-index c2ae8b2..d5cc9ed 100644
+index cb15129..7143622 100644
 --- a/.github/workflows/vmtest.yml
 +++ b/.github/workflows/vmtest.yml
-@@ -46,7 +46,7 @@ jobs:
+@@ -44,7 +44,7 @@ jobs:
          uses: libbpf/ci/get-linux-source@v3
          with:
            repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git'

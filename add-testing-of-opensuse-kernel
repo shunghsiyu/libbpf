@@ -12,7 +12,7 @@ Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
  create mode 100644 .github/workflows/vmtest-opensuse.yml
 
 diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
-index a65a10f..3b01402 100644
+index 81e29d0..1d7849d 100644
 --- a/.github/workflows/test.yml
 +++ b/.github/workflows/test.yml
 @@ -34,3 +34,21 @@ jobs:

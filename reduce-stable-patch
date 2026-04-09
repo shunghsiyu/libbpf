@@ -11,10 +11,10 @@ Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
  1 file changed, 2 deletions(-)
 
 diff --git a/.github/workflows/vmtest.yml b/.github/workflows/vmtest.yml
-index 48c0951..ed6faed 100644
+index e8bc4bf..0920fbd 100644
 --- a/.github/workflows/vmtest.yml
 +++ b/.github/workflows/vmtest.yml
-@@ -52,13 +52,11 @@ jobs:
+@@ -50,13 +50,11 @@ jobs:
        - name: Get queued stable patches
          shell: bash
          run: |

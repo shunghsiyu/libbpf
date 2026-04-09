@@ -42,7 +42,7 @@ Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
  create mode 100644 ci/vmtest/configs/DENYLIST-6.6
 
 diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
-index bd3af40..dc50b15 100644
+index 8d18b10..847e94a 100644
 --- a/.github/workflows/test.yml
 +++ b/.github/workflows/test.yml
 @@ -26,6 +26,11 @@ jobs:

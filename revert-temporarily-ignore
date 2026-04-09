@@ -2,21 +2,21 @@ Revert "Temporarily ignore map_kptr and test_profiler"
 
 From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 
-This reverts commit 6bb17076f1c4c5aeddb990c926cb8a19dae2ffa3. Those have
-been fixed in v7.0-rc1.
+Those have been fixed in v7.0-rc1.
 ---
- ci/vmtest/configs/DENYLIST-LATEST |    4 ----
- 1 file changed, 4 deletions(-)
+ ci/vmtest/configs/DENYLIST-LATEST |    2 --
+ 1 file changed, 2 deletions(-)
 
 diff --git a/ci/vmtest/configs/DENYLIST-LATEST b/ci/vmtest/configs/DENYLIST-LATEST
-index 4c08129..49d76ee 100644
+index 086ff9c..1d7be20 100644
 --- a/ci/vmtest/configs/DENYLIST-LATEST
 +++ b/ci/vmtest/configs/DENYLIST-LATEST
-@@ -13,7 +13,3 @@ lwt_reroute # crashes kernel, fix pending upstream
+@@ -12,8 +12,6 @@ send_signal/send_signal_nmi_thread
+ lwt_reroute # crashes kernel, fix pending upstream
  tc_links_ingress # fails, same fix is pending upstream
  tc_redirect		  # enough is enough, banned for life for flakiness
+-map_kptr                  # kprobe rcu_tasks_trace_postgp not available in VM kernel
+-test_profiler             # kretprobe do_filp_open not available in VM kernel
+ sockmap_basic/sockmap udp multi channels  # flaky in CI
+ bpf_cookie/perf_event # flaky, needs investigation
  verif_scale_pyperf600 # failing since LLVM 18+
--
--# https://lore.kernel.org/bpf/djwjf2vfb7gro3rfag666bojod6ytcectahnb5z6hx2hawimtj@sx47ghzjg4lw/
--map_kptr
--test_profiler

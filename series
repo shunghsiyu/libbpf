@@ -1,4 +1,4 @@
-# This series applies on Git commit 374036c9f1cdfe2a8df98d9d6a53c34fd02de14b
+# This series applies on Git commit f5dcbae736e5d7f83a35718e01be1a8e3010fa39
 hack-try-to-get-github-action
 hack-use-commit-id-instead-of
 hack-use-my-fork-of-libbpf-ci
@@ -46,7 +46,6 @@ drop-the-latest-constraints-in
 include-temporary-fix-for
 add-denylist-for-sl-16.1
 downgrade-llvm-from-22-to-21
-temporarily-ignore-map_kptr
 revert-temporarily-ignore
 allow-version-specific
 include-stable-6.19-into

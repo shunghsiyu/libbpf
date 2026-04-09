@@ -8,14 +8,14 @@ From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/.github/workflows/vmtest.yml b/.github/workflows/vmtest.yml
-index c2ae8b2..ff85006 100644
+index b0cbade..9ee56ea 100644
 --- a/.github/workflows/vmtest.yml
 +++ b/.github/workflows/vmtest.yml
-@@ -43,7 +43,7 @@ jobs:
+@@ -41,7 +41,7 @@ jobs:
            llvm-version: ${{ inputs.llvm-version }}
  
        - name: Get kernel source at checkpoint
--        uses: libbpf/ci/get-linux-source@v3
+-        uses: libbpf/ci/get-linux-source@v4
 +        uses: shunghsiyu/libbpf-ci/get-linux-source@v3
          with:
            repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git'

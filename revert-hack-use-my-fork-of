@@ -12,10 +12,10 @@ GitHub actions fails with
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/.github/workflows/vmtest.yml b/.github/workflows/vmtest.yml
-index ff85006..c2ae8b2 100644
+index 9ee56ea..cb15129 100644
 --- a/.github/workflows/vmtest.yml
 +++ b/.github/workflows/vmtest.yml
-@@ -43,7 +43,7 @@ jobs:
+@@ -41,7 +41,7 @@ jobs:
            llvm-version: ${{ inputs.llvm-version }}
  
        - name: Get kernel source at checkpoint

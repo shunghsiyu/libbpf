@@ -8,10 +8,10 @@ From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
  1 file changed, 2 insertions(+), 8 deletions(-)
 
 diff --git a/.github/workflows/vmtest.yml b/.github/workflows/vmtest.yml
-index 7989f86..d5cc9ed 100644
+index 2adc133..3ab14ae 100644
 --- a/.github/workflows/vmtest.yml
 +++ b/.github/workflows/vmtest.yml
-@@ -42,17 +42,11 @@ jobs:
+@@ -40,17 +40,11 @@ jobs:
            arch: ${{ inputs.arch }}
            llvm-version: ${{ inputs.llvm-version }}
  
@@ -22,7 +22,7 @@ index 7989f86..d5cc9ed 100644
 -          echo "CHECKPOINT=$(cat CHECKPOINT-COMMIT)" >> $GITHUB_ENV
 -
        - name: Get kernel source at checkpoint
-         uses: libbpf/ci/get-linux-source@v3
+         uses: libbpf/ci/get-linux-source@v4
          with:
 -          repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git'
 -          rev: ${{ env.CHECKPOINT }}
