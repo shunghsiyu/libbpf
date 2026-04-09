@@ -1,0 +1,33 @@
+Bump stable and mainline version
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+6.15 has reached EOL, test 6.16 instead.
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ .github/workflows/test.yml |    4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
+index dc50b15..03e3227 100644
+--- a/.github/workflows/test.yml
++++ b/.github/workflows/test.yml
+@@ -16,7 +16,7 @@ jobs:
+       fail-fast: false
+       matrix:
+         include:
+-          - kernel: '6.15'
++          - kernel: '6.16'
+             runs_on: 'ubuntu-24.04'
+             arch: 'x86_64'
+             llvm-version: '18'
+@@ -44,7 +44,7 @@ jobs:
+       fail-fast: false
+       matrix:
+         include:
+-          - kernel: '6.16'
++          - kernel: '6.17'
+             runs_on: 'ubuntu-24.04'
+             arch: 'x86_64'
+             llvm-version: '18'

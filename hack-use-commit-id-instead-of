@@ -1,0 +1,22 @@
+HACK: use commit ID instead of branch name
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+
+---
+ .github/workflows/vmtest.yml |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/.github/workflows/vmtest.yml b/.github/workflows/vmtest.yml
+index d5cc9ed..c2ae8b2 100644
+--- a/.github/workflows/vmtest.yml
++++ b/.github/workflows/vmtest.yml
+@@ -46,7 +46,7 @@ jobs:
+         uses: libbpf/ci/get-linux-source@v3
+         with:
+           repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git'
+-          rev: 'linux-6.12.y'
++          rev: 'f491dd2afe1c2cde1cfb59d6f7f0cf28fa34d88e' # Latest linux-6.12.y
+           dest: '${{ github.workspace }}/.kernel'
+ 
+       - name: Patch kernel source

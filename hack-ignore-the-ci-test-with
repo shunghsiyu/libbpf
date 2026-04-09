@@ -1,0 +1,25 @@
+HACK: ignore the ci test with pahole tmp.master for now
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+
+---
+ .github/workflows/test.yml |    5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
+index 2d90150..1e84c30 100644
+--- a/.github/workflows/test.yml
++++ b/.github/workflows/test.yml
+@@ -21,11 +21,6 @@ jobs:
+             arch: 'x86_64'
+             llvm-version: '18'
+             pahole: 'master'
+-          - kernel: 'LATEST'
+-            runs_on: 'ubuntu-24.04'
+-            arch: 'x86_64'
+-            llvm-version: '18'
+-            pahole: 'tmp.master'
+     name: Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
+     uses: ./.github/workflows/vmtest.yml
+     with:

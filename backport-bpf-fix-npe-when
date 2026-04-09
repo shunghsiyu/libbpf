@@ -1,0 +1,467 @@
+Backport "bpf: fix NPE when computing changes_pkt_data of program w/o subprograms" series
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+Follow up of the "bpf: track changes_pkt_data property for global
+functions" series.
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ ...lftests-bpf-Fix-raw_tp-null-handling-test.patch |    2 
+ ...pf-Mitigate-sockmap_ktls-disconnect_after.patch |    2 
+ ...pf-fix-bpf_map_redirect-call-for-cpu-map-.patch |    2 
+ ...pf-make-xdp_cpumap_attach-keep-redirect-p.patch |    2 
+ ...pf-check-program-redirect-in-xdp_cpumap_a.patch |    2 
+ ...sts-bpf-Adjust-data-size-to-have-ETH_HLEN.patch |    2 
+ ...-find_containing_subprog-utility-function.patch |    2 
+ ...r-bpf_helper_changes_pkt_data-to-use-help.patch |    2 
+ ...hanges_pkt_data-property-for-global-funct.patch |    2 
+ ...pf-test-for-changing-packet-data-from-glo.patch |    2 
+ ...hanges_pkt_data-property-for-extension-pr.patch |    2 
+ ...pf-freplace-tests-for-tracking-of-changes.patch |    2 
+ ...pf-validate-that-tail-call-invalidates-pa.patch |    2 
+ ...l-dereference-when-computing-changes_pkt_.patch |   71 ++++++++
+ ...pf-extend-changes_pkt_data-with-cases-w-o.patch |  187 ++++++++++++++++++++
+ 15 files changed, 271 insertions(+), 13 deletions(-)
+ create mode 100644 ci/diffs/0014-bpf-fix-null-dereference-when-computing-changes_pkt_.patch
+ create mode 100644 ci/diffs/0015-selftests-bpf-extend-changes_pkt_data-with-cases-w-o.patch
+
+diff --git a/ci/diffs/0001-selftests-bpf-Fix-raw_tp-null-handling-test.patch b/ci/diffs/0001-selftests-bpf-Fix-raw_tp-null-handling-test.patch
+index 5c6060c..77afe61 100644
+--- a/ci/diffs/0001-selftests-bpf-Fix-raw_tp-null-handling-test.patch
++++ b/ci/diffs/0001-selftests-bpf-Fix-raw_tp-null-handling-test.patch
+@@ -1,7 +1,7 @@
+ From c17577de68e60ae9742a9bf8f7409debd8eff9ec Mon Sep 17 00:00:00 2001
+ From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+ Date: Fri, 18 Apr 2025 14:09:00 +0800
+-Subject: [PATCH 01/13] selftests/bpf: Fix raw_tp null handling test
++Subject: [PATCH 01/15] selftests/bpf: Fix raw_tp null handling test
+ 
+ Commit b2fc4b17fc13, backport of upstream commit 838a10bd2ebf ("bpf:
+ Augment raw_tp arguments with PTR_MAYBE_NULL"), was missing the changes
+diff --git a/ci/diffs/0002-selftests-bpf-Mitigate-sockmap_ktls-disconnect_after.patch b/ci/diffs/0002-selftests-bpf-Mitigate-sockmap_ktls-disconnect_after.patch
+index e786b5f..3bd6b34 100644
+--- a/ci/diffs/0002-selftests-bpf-Mitigate-sockmap_ktls-disconnect_after.patch
++++ b/ci/diffs/0002-selftests-bpf-Mitigate-sockmap_ktls-disconnect_after.patch
+@@ -1,7 +1,7 @@
+ From bb6bf5caba04a19765c7036b78f163a024e2931e Mon Sep 17 00:00:00 2001
+ From: Ihor Solodrai <ihor.solodrai@linux.dev>
+ Date: Wed, 16 Apr 2025 10:02:46 -0700
+-Subject: [PATCH 02/13] selftests/bpf: Mitigate sockmap_ktls
++Subject: [PATCH 02/15] selftests/bpf: Mitigate sockmap_ktls
+  disconnect_after_delete failure
+ 
+ "sockmap_ktls disconnect_after_delete" test has been failing on BPF CI
+diff --git a/ci/diffs/0003-selftests-bpf-fix-bpf_map_redirect-call-for-cpu-map-.patch b/ci/diffs/0003-selftests-bpf-fix-bpf_map_redirect-call-for-cpu-map-.patch
+index f2e2f13..471c212 100644
+--- a/ci/diffs/0003-selftests-bpf-fix-bpf_map_redirect-call-for-cpu-map-.patch
++++ b/ci/diffs/0003-selftests-bpf-fix-bpf_map_redirect-call-for-cpu-map-.patch
+@@ -2,7 +2,7 @@ From 97b2894b2a6566b9b1b050f6c82d12584d414415 Mon Sep 17 00:00:00 2001
+ From: =?UTF-8?q?Alexis=20Lothor=C3=A9=20=28eBPF=20Foundation=29?=
+  <alexis.lothore@bootlin.com>
+ Date: Wed, 9 Oct 2024 12:12:07 +0200
+-Subject: [PATCH 03/13] selftests/bpf: fix bpf_map_redirect call for cpu map
++Subject: [PATCH 03/15] selftests/bpf: fix bpf_map_redirect call for cpu map
+  test
+ MIME-Version: 1.0
+ Content-Type: text/plain; charset=UTF-8
+diff --git a/ci/diffs/0004-selftests-bpf-make-xdp_cpumap_attach-keep-redirect-p.patch b/ci/diffs/0004-selftests-bpf-make-xdp_cpumap_attach-keep-redirect-p.patch
+index 25541fd..2946e44 100644
+--- a/ci/diffs/0004-selftests-bpf-make-xdp_cpumap_attach-keep-redirect-p.patch
++++ b/ci/diffs/0004-selftests-bpf-make-xdp_cpumap_attach-keep-redirect-p.patch
+@@ -2,7 +2,7 @@ From d8c8166dd1de3ae2fbdcb666ad788c726ebaea29 Mon Sep 17 00:00:00 2001
+ From: =?UTF-8?q?Alexis=20Lothor=C3=A9=20=28eBPF=20Foundation=29?=
+  <alexis.lothore@bootlin.com>
+ Date: Wed, 9 Oct 2024 12:12:08 +0200
+-Subject: [PATCH 04/13] selftests/bpf: make xdp_cpumap_attach keep redirect
++Subject: [PATCH 04/15] selftests/bpf: make xdp_cpumap_attach keep redirect
+  prog attached
+ MIME-Version: 1.0
+ Content-Type: text/plain; charset=UTF-8
+diff --git a/ci/diffs/0005-selftests-bpf-check-program-redirect-in-xdp_cpumap_a.patch b/ci/diffs/0005-selftests-bpf-check-program-redirect-in-xdp_cpumap_a.patch
+index 615c8d4..3fcf228 100644
+--- a/ci/diffs/0005-selftests-bpf-check-program-redirect-in-xdp_cpumap_a.patch
++++ b/ci/diffs/0005-selftests-bpf-check-program-redirect-in-xdp_cpumap_a.patch
+@@ -2,7 +2,7 @@ From 49c900aaabd40d3285d80e5c76a44680257376cd Mon Sep 17 00:00:00 2001
+ From: =?UTF-8?q?Alexis=20Lothor=C3=A9=20=28eBPF=20Foundation=29?=
+  <alexis.lothore@bootlin.com>
+ Date: Wed, 9 Oct 2024 12:12:09 +0200
+-Subject: [PATCH 05/13] selftests/bpf: check program redirect in
++Subject: [PATCH 05/15] selftests/bpf: check program redirect in
+  xdp_cpumap_attach
+ MIME-Version: 1.0
+ Content-Type: text/plain; charset=UTF-8
+diff --git a/ci/diffs/0006-selftests-bpf-Adjust-data-size-to-have-ETH_HLEN.patch b/ci/diffs/0006-selftests-bpf-Adjust-data-size-to-have-ETH_HLEN.patch
+index 3891ae4..ac8ba51 100644
+--- a/ci/diffs/0006-selftests-bpf-Adjust-data-size-to-have-ETH_HLEN.patch
++++ b/ci/diffs/0006-selftests-bpf-Adjust-data-size-to-have-ETH_HLEN.patch
+@@ -1,7 +1,7 @@
+ From 15be6c3cfe0ae6bebee6eceeca32a5cfe46f9d19 Mon Sep 17 00:00:00 2001
+ From: Shigeru Yoshida <syoshida@redhat.com>
+ Date: Wed, 22 Jan 2025 00:06:43 +0900
+-Subject: [PATCH 06/13] selftests/bpf: Adjust data size to have ETH_HLEN
++Subject: [PATCH 06/15] selftests/bpf: Adjust data size to have ETH_HLEN
+ 
+ The function bpf_test_init() now returns an error if user_size
+ (.data_size_in) is less than ETH_HLEN, causing the tests to
+diff --git a/ci/diffs/0007-bpf-add-find_containing_subprog-utility-function.patch b/ci/diffs/0007-bpf-add-find_containing_subprog-utility-function.patch
+index b499efb..8f8b8a5 100644
+--- a/ci/diffs/0007-bpf-add-find_containing_subprog-utility-function.patch
++++ b/ci/diffs/0007-bpf-add-find_containing_subprog-utility-function.patch
+@@ -1,7 +1,7 @@
+ From c1217d5e34d6d6e419b98b6b705ab14f42aa4ed4 Mon Sep 17 00:00:00 2001
+ From: Eduard Zingerman <eddyz87@gmail.com>
+ Date: Mon, 9 Dec 2024 20:10:53 -0800
+-Subject: [PATCH 07/13] bpf: add find_containing_subprog() utility function
++Subject: [PATCH 07/15] bpf: add find_containing_subprog() utility function
+ 
+ Add a utility function, looking for a subprogram containing a given
+ instruction index, rewrite find_subprog() to use this function.
+diff --git a/ci/diffs/0008-bpf-refactor-bpf_helper_changes_pkt_data-to-use-help.patch b/ci/diffs/0008-bpf-refactor-bpf_helper_changes_pkt_data-to-use-help.patch
+index 8943c83..3c99aeb 100644
+--- a/ci/diffs/0008-bpf-refactor-bpf_helper_changes_pkt_data-to-use-help.patch
++++ b/ci/diffs/0008-bpf-refactor-bpf_helper_changes_pkt_data-to-use-help.patch
+@@ -1,7 +1,7 @@
+ From 696f6141e289d75d259caa4232889102427d5b71 Mon Sep 17 00:00:00 2001
+ From: Eduard Zingerman <eddyz87@gmail.com>
+ Date: Mon, 9 Dec 2024 20:10:54 -0800
+-Subject: [PATCH 08/13] bpf: refactor bpf_helper_changes_pkt_data to use helper
++Subject: [PATCH 08/15] bpf: refactor bpf_helper_changes_pkt_data to use helper
+  number
+ 
+ Use BPF helper number instead of function pointer in
+diff --git a/ci/diffs/0009-bpf-track-changes_pkt_data-property-for-global-funct.patch b/ci/diffs/0009-bpf-track-changes_pkt_data-property-for-global-funct.patch
+index 83a3580..ea1b844 100644
+--- a/ci/diffs/0009-bpf-track-changes_pkt_data-property-for-global-funct.patch
++++ b/ci/diffs/0009-bpf-track-changes_pkt_data-property-for-global-funct.patch
+@@ -1,7 +1,7 @@
+ From 4fe51997706aca9b179e6f6330c0aff3e147c23a Mon Sep 17 00:00:00 2001
+ From: Eduard Zingerman <eddyz87@gmail.com>
+ Date: Mon, 9 Dec 2024 20:10:55 -0800
+-Subject: [PATCH 09/13] bpf: track changes_pkt_data property for global
++Subject: [PATCH 09/15] bpf: track changes_pkt_data property for global
+  functions
+ 
+ When processing calls to certain helpers, verifier invalidates all
+diff --git a/ci/diffs/0010-selftests-bpf-test-for-changing-packet-data-from-glo.patch b/ci/diffs/0010-selftests-bpf-test-for-changing-packet-data-from-glo.patch
+index 2e2c3db..f315dd1 100644
+--- a/ci/diffs/0010-selftests-bpf-test-for-changing-packet-data-from-glo.patch
++++ b/ci/diffs/0010-selftests-bpf-test-for-changing-packet-data-from-glo.patch
+@@ -1,7 +1,7 @@
+ From eaf5fc69079ca39cec1f1db06441e823b819bc1a Mon Sep 17 00:00:00 2001
+ From: Eduard Zingerman <eddyz87@gmail.com>
+ Date: Mon, 9 Dec 2024 20:10:56 -0800
+-Subject: [PATCH 10/13] selftests/bpf: test for changing packet data from
++Subject: [PATCH 10/15] selftests/bpf: test for changing packet data from
+  global functions
+ 
+ Check if verifier is aware of packet pointers invalidation done in
+diff --git a/ci/diffs/0011-bpf-check-changes_pkt_data-property-for-extension-pr.patch b/ci/diffs/0011-bpf-check-changes_pkt_data-property-for-extension-pr.patch
+index 459b37c..8eb3ba5 100644
+--- a/ci/diffs/0011-bpf-check-changes_pkt_data-property-for-extension-pr.patch
++++ b/ci/diffs/0011-bpf-check-changes_pkt_data-property-for-extension-pr.patch
+@@ -1,7 +1,7 @@
+ From 4f3f2268b9ccdbeef29cf7bbf11cc78f07e50ae0 Mon Sep 17 00:00:00 2001
+ From: Eduard Zingerman <eddyz87@gmail.com>
+ Date: Mon, 9 Dec 2024 20:10:57 -0800
+-Subject: [PATCH 11/13] bpf: check changes_pkt_data property for extension
++Subject: [PATCH 11/15] bpf: check changes_pkt_data property for extension
+  programs
+ 
+ When processing calls to global sub-programs, verifier decides whether
+diff --git a/ci/diffs/0012-selftests-bpf-freplace-tests-for-tracking-of-changes.patch b/ci/diffs/0012-selftests-bpf-freplace-tests-for-tracking-of-changes.patch
+index bc56364..3c02502 100644
+--- a/ci/diffs/0012-selftests-bpf-freplace-tests-for-tracking-of-changes.patch
++++ b/ci/diffs/0012-selftests-bpf-freplace-tests-for-tracking-of-changes.patch
+@@ -1,7 +1,7 @@
+ From 16c22af3bc27b622addb3e9c8cfc46fad59a5cda Mon Sep 17 00:00:00 2001
+ From: Eduard Zingerman <eddyz87@gmail.com>
+ Date: Mon, 9 Dec 2024 20:10:58 -0800
+-Subject: [PATCH 12/13] selftests/bpf: freplace tests for tracking of
++Subject: [PATCH 12/15] selftests/bpf: freplace tests for tracking of
+  changes_packet_data
+ 
+ Try different combinations of global functions replacement:
+diff --git a/ci/diffs/0013-selftests-bpf-validate-that-tail-call-invalidates-pa.patch b/ci/diffs/0013-selftests-bpf-validate-that-tail-call-invalidates-pa.patch
+index e95ae09..8c61097 100644
+--- a/ci/diffs/0013-selftests-bpf-validate-that-tail-call-invalidates-pa.patch
++++ b/ci/diffs/0013-selftests-bpf-validate-that-tail-call-invalidates-pa.patch
+@@ -1,7 +1,7 @@
+ From d1a4ff629cebe91099abd702e03321340c37b874 Mon Sep 17 00:00:00 2001
+ From: Eduard Zingerman <eddyz87@gmail.com>
+ Date: Mon, 9 Dec 2024 20:11:00 -0800
+-Subject: [PATCH 13/13] selftests/bpf: validate that tail call invalidates
++Subject: [PATCH 13/15] selftests/bpf: validate that tail call invalidates
+  packet pointers
+ 
+ Add a test case with a tail call done from a global sub-program. Such
+diff --git a/ci/diffs/0014-bpf-fix-null-dereference-when-computing-changes_pkt_.patch b/ci/diffs/0014-bpf-fix-null-dereference-when-computing-changes_pkt_.patch
+new file mode 100644
+index 0000000..c54e625
+--- /dev/null
++++ b/ci/diffs/0014-bpf-fix-null-dereference-when-computing-changes_pkt_.patch
+@@ -0,0 +1,71 @@
++From 70aa83d9cb3e7884491be38df1b4f3d9864156b7 Mon Sep 17 00:00:00 2001
++From: Eduard Zingerman <eddyz87@gmail.com>
++Date: Wed, 11 Dec 2024 23:07:10 -0800
++Subject: [PATCH 14/15] bpf: fix null dereference when computing
++ changes_pkt_data of prog w/o subprogs
++
++bpf_prog_aux->func field might be NULL if program does not have
++subprograms except for main sub-program. The fixed commit does
++bpf_prog_aux->func access unconditionally, which might lead to null
++pointer dereference.
++
++The bug could be triggered by replacing the following BPF program:
++
++    SEC("tc")
++    int main_changes(struct __sk_buff *sk)
++    {
++        bpf_skb_pull_data(sk, 0);
++        return 0;
++    }
++
++With the following BPF program:
++
++    SEC("freplace")
++    long changes_pkt_data(struct __sk_buff *sk)
++    {
++        return bpf_skb_pull_data(sk, 0);
++    }
++
++bpf_prog_aux instance itself represents the main sub-program,
++use this property to fix the bug.
++
++Fixes: 81f6d0530ba0 ("bpf: check changes_pkt_data property for extension programs")
++Reported-by: kernel test robot <lkp@intel.com>
++Reported-by: Dan Carpenter <dan.carpenter@linaro.org>
++Closes: https://lore.kernel.org/r/202412111822.qGw6tOyB-lkp@intel.com/
++Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
++Link: https://lore.kernel.org/r/20241212070711.427443-1-eddyz87@gmail.com
++Signed-off-by: Alexei Starovoitov <ast@kernel.org>
++Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
++---
++ kernel/bpf/verifier.c | 7 +++++--
++ 1 file changed, 5 insertions(+), 2 deletions(-)
++
++diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
++index e2e16349ae3f..d2ef289993f2 100644
++--- a/kernel/bpf/verifier.c
+++++ b/kernel/bpf/verifier.c
++@@ -21990,6 +21990,7 @@ int bpf_check_attach_target(struct bpf_verifier_log *log,
++ 	}
++ 	if (tgt_prog) {
++ 		struct bpf_prog_aux *aux = tgt_prog->aux;
+++		bool tgt_changes_pkt_data;
++ 
++ 		if (bpf_prog_is_dev_bound(prog->aux) &&
++ 		    !bpf_prog_dev_bound_match(prog, tgt_prog)) {
++@@ -22024,8 +22025,10 @@ int bpf_check_attach_target(struct bpf_verifier_log *log,
++ 					"Extension programs should be JITed\n");
++ 				return -EINVAL;
++ 			}
++-			if (prog->aux->changes_pkt_data &&
++-			    !aux->func[subprog]->aux->changes_pkt_data) {
+++			tgt_changes_pkt_data = aux->func
+++					       ? aux->func[subprog]->aux->changes_pkt_data
+++					       : aux->changes_pkt_data;
+++			if (prog->aux->changes_pkt_data && !tgt_changes_pkt_data) {
++ 				bpf_log(log,
++ 					"Extension program changes packet data, while original does not\n");
++ 				return -EINVAL;
++-- 
++2.49.0
++
+diff --git a/ci/diffs/0015-selftests-bpf-extend-changes_pkt_data-with-cases-w-o.patch b/ci/diffs/0015-selftests-bpf-extend-changes_pkt_data-with-cases-w-o.patch
+new file mode 100644
+index 0000000..7aeb6cb
+--- /dev/null
++++ b/ci/diffs/0015-selftests-bpf-extend-changes_pkt_data-with-cases-w-o.patch
+@@ -0,0 +1,187 @@
++From b3966a112f1dd758202ecd4a6d7afdd96ff2db0f Mon Sep 17 00:00:00 2001
++From: Eduard Zingerman <eddyz87@gmail.com>
++Date: Wed, 11 Dec 2024 23:07:11 -0800
++Subject: [PATCH 15/15] selftests/bpf: extend changes_pkt_data with cases w/o
++ subprograms
++
++Extend changes_pkt_data tests with test cases freplacing the main
++program that does not have subprograms. Try four combinations when
++both main program and replacement do and do not change packet data.
++
++Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
++Link: https://lore.kernel.org/r/20241212070711.427443-2-eddyz87@gmail.com
++Signed-off-by: Alexei Starovoitov <ast@kernel.org>
++Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
++---
++ .../bpf/prog_tests/changes_pkt_data.c         | 55 +++++++++++++++----
++ .../selftests/bpf/progs/changes_pkt_data.c    | 27 ++++++---
++ .../bpf/progs/changes_pkt_data_freplace.c     |  6 +-
++ 3 files changed, 66 insertions(+), 22 deletions(-)
++
++diff --git a/tools/testing/selftests/bpf/prog_tests/changes_pkt_data.c b/tools/testing/selftests/bpf/prog_tests/changes_pkt_data.c
++index c0c7202f6c5c..7526de379081 100644
++--- a/tools/testing/selftests/bpf/prog_tests/changes_pkt_data.c
+++++ b/tools/testing/selftests/bpf/prog_tests/changes_pkt_data.c
++@@ -10,10 +10,14 @@ static void print_verifier_log(const char *log)
++ 		fprintf(stdout, "VERIFIER LOG:\n=============\n%s=============\n", log);
++ }
++ 
++-static void test_aux(const char *main_prog_name, const char *freplace_prog_name, bool expect_load)
+++static void test_aux(const char *main_prog_name,
+++		     const char *to_be_replaced,
+++		     const char *replacement,
+++		     bool expect_load)
++ {
++ 	struct changes_pkt_data_freplace *freplace = NULL;
++ 	struct bpf_program *freplace_prog = NULL;
+++	struct bpf_program *main_prog = NULL;
++ 	LIBBPF_OPTS(bpf_object_open_opts, opts);
++ 	struct changes_pkt_data *main = NULL;
++ 	char log[16*1024];
++@@ -26,6 +30,10 @@ static void test_aux(const char *main_prog_name, const char *freplace_prog_name,
++ 	main = changes_pkt_data__open_opts(&opts);
++ 	if (!ASSERT_OK_PTR(main, "changes_pkt_data__open"))
++ 		goto out;
+++	main_prog = bpf_object__find_program_by_name(main->obj, main_prog_name);
+++	if (!ASSERT_OK_PTR(main_prog, "main_prog"))
+++		goto out;
+++	bpf_program__set_autoload(main_prog, true);
++ 	err = changes_pkt_data__load(main);
++ 	print_verifier_log(log);
++ 	if (!ASSERT_OK(err, "changes_pkt_data__load"))
++@@ -33,14 +41,14 @@ static void test_aux(const char *main_prog_name, const char *freplace_prog_name,
++ 	freplace = changes_pkt_data_freplace__open_opts(&opts);
++ 	if (!ASSERT_OK_PTR(freplace, "changes_pkt_data_freplace__open"))
++ 		goto out;
++-	freplace_prog = bpf_object__find_program_by_name(freplace->obj, freplace_prog_name);
+++	freplace_prog = bpf_object__find_program_by_name(freplace->obj, replacement);
++ 	if (!ASSERT_OK_PTR(freplace_prog, "freplace_prog"))
++ 		goto out;
++ 	bpf_program__set_autoload(freplace_prog, true);
++ 	bpf_program__set_autoattach(freplace_prog, true);
++ 	bpf_program__set_attach_target(freplace_prog,
++-				       bpf_program__fd(main->progs.dummy),
++-				       main_prog_name);
+++				       bpf_program__fd(main_prog),
+++				       to_be_replaced);
++ 	err = changes_pkt_data_freplace__load(freplace);
++ 	print_verifier_log(log);
++ 	if (expect_load) {
++@@ -62,15 +70,38 @@ static void test_aux(const char *main_prog_name, const char *freplace_prog_name,
++  * that either do or do not. It is only ok to freplace subprograms
++  * that do not change packet data with those that do not as well.
++  * The below tests check outcomes for each combination of such freplace.
+++ * Also test a case when main subprogram itself is replaced and is a single
+++ * subprogram in a program.
++  */
++ void test_changes_pkt_data_freplace(void)
++ {
++-	if (test__start_subtest("changes_with_changes"))
++-		test_aux("changes_pkt_data", "changes_pkt_data", true);
++-	if (test__start_subtest("changes_with_doesnt_change"))
++-		test_aux("changes_pkt_data", "does_not_change_pkt_data", true);
++-	if (test__start_subtest("doesnt_change_with_changes"))
++-		test_aux("does_not_change_pkt_data", "changes_pkt_data", false);
++-	if (test__start_subtest("doesnt_change_with_doesnt_change"))
++-		test_aux("does_not_change_pkt_data", "does_not_change_pkt_data", true);
+++	struct {
+++		const char *main;
+++		const char *to_be_replaced;
+++		bool changes;
+++	} mains[] = {
+++		{ "main_with_subprogs",   "changes_pkt_data",         true },
+++		{ "main_with_subprogs",   "does_not_change_pkt_data", false },
+++		{ "main_changes",         "main_changes",             true },
+++		{ "main_does_not_change", "main_does_not_change",     false },
+++	};
+++	struct {
+++		const char *func;
+++		bool changes;
+++	} replacements[] = {
+++		{ "changes_pkt_data",         true },
+++		{ "does_not_change_pkt_data", false }
+++	};
+++	char buf[64];
+++
+++	for (int i = 0; i < ARRAY_SIZE(mains); ++i) {
+++		for (int j = 0; j < ARRAY_SIZE(replacements); ++j) {
+++			snprintf(buf, sizeof(buf), "%s_with_%s",
+++				 mains[i].to_be_replaced, replacements[j].func);
+++			if (!test__start_subtest(buf))
+++				continue;
+++			test_aux(mains[i].main, mains[i].to_be_replaced, replacements[j].func,
+++				 mains[i].changes || !replacements[j].changes);
+++		}
+++	}
++ }
++diff --git a/tools/testing/selftests/bpf/progs/changes_pkt_data.c b/tools/testing/selftests/bpf/progs/changes_pkt_data.c
++index f87da8e9d6b3..43cada48b28a 100644
++--- a/tools/testing/selftests/bpf/progs/changes_pkt_data.c
+++++ b/tools/testing/selftests/bpf/progs/changes_pkt_data.c
++@@ -4,22 +4,35 @@
++ #include <bpf/bpf_helpers.h>
++ 
++ __noinline
++-long changes_pkt_data(struct __sk_buff *sk, __u32 len)
+++long changes_pkt_data(struct __sk_buff *sk)
++ {
++-	return bpf_skb_pull_data(sk, len);
+++	return bpf_skb_pull_data(sk, 0);
++ }
++ 
++ __noinline __weak
++-long does_not_change_pkt_data(struct __sk_buff *sk, __u32 len)
+++long does_not_change_pkt_data(struct __sk_buff *sk)
++ {
++ 	return 0;
++ }
++ 
++-SEC("tc")
++-int dummy(struct __sk_buff *sk)
+++SEC("?tc")
+++int main_with_subprogs(struct __sk_buff *sk)
+++{
+++	changes_pkt_data(sk);
+++	does_not_change_pkt_data(sk);
+++	return 0;
+++}
+++
+++SEC("?tc")
+++int main_changes(struct __sk_buff *sk)
+++{
+++	bpf_skb_pull_data(sk, 0);
+++	return 0;
+++}
+++
+++SEC("?tc")
+++int main_does_not_change(struct __sk_buff *sk)
++ {
++-	changes_pkt_data(sk, 0);
++-	does_not_change_pkt_data(sk, 0);
++ 	return 0;
++ }
++ 
++diff --git a/tools/testing/selftests/bpf/progs/changes_pkt_data_freplace.c b/tools/testing/selftests/bpf/progs/changes_pkt_data_freplace.c
++index 0e525beb8603..f9a622705f1b 100644
++--- a/tools/testing/selftests/bpf/progs/changes_pkt_data_freplace.c
+++++ b/tools/testing/selftests/bpf/progs/changes_pkt_data_freplace.c
++@@ -4,13 +4,13 @@
++ #include <bpf/bpf_helpers.h>
++ 
++ SEC("?freplace")
++-long changes_pkt_data(struct __sk_buff *sk, __u32 len)
+++long changes_pkt_data(struct __sk_buff *sk)
++ {
++-	return bpf_skb_pull_data(sk, len);
+++	return bpf_skb_pull_data(sk, 0);
++ }
++ 
++ SEC("?freplace")
++-long does_not_change_pkt_data(struct __sk_buff *sk, __u32 len)
+++long does_not_change_pkt_data(struct __sk_buff *sk)
++ {
++ 	return 0;
++ }
++-- 
++2.49.0
++

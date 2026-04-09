@@ -1,0 +1,48 @@
+Bump kernel and LLVM versions
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+Update stable kernel version to the latest, and use newer LLVM on
+mainline to try resolve BPF selftests compilation issue (suggested by
+Ihor).
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ .github/workflows/test.yml |   13 +++++++++----
+ 1 file changed, 9 insertions(+), 4 deletions(-)
+
+diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
+index 03e3227..5d8e364 100644
+--- a/.github/workflows/test.yml
++++ b/.github/workflows/test.yml
+@@ -16,10 +16,15 @@ jobs:
+       fail-fast: false
+       matrix:
+         include:
+-          - kernel: '6.16'
++          - kernel: '6.18'
+             runs_on: 'ubuntu-24.04'
+             arch: 'x86_64'
+-            llvm-version: '18'
++            llvm-version: '22'
++            pahole: 'master'
++          - kernel: '6.17'
++            runs_on: 'ubuntu-24.04'
++            arch: 'x86_64'
++            llvm-version: '21'
+             pahole: 'master'
+           - kernel: '6.12'
+             runs_on: 'ubuntu-24.04'
+@@ -44,10 +49,10 @@ jobs:
+       fail-fast: false
+       matrix:
+         include:
+-          - kernel: '6.17'
++          - kernel: '6.19'
+             runs_on: 'ubuntu-24.04'
+             arch: 'x86_64'
+-            llvm-version: '18'
++            llvm-version: '22'
+             pahole: 'master'
+     name: Mainline Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
+     uses: ./.github/workflows/vmtest-mainline.yml

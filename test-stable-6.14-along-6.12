@@ -1,0 +1,21 @@
+Test stable 6.14 along 6.12 LTS
+
+From: Shung-Hsi Yu <6041291+shunghsiyu@users.noreply.github.com>
+
+
+---
+ .github/workflows/vmtest.yml |    1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/.github/workflows/vmtest.yml b/.github/workflows/vmtest.yml
+index 91a421e..23a3bcc 100644
+--- a/.github/workflows/vmtest.yml
++++ b/.github/workflows/vmtest.yml
+@@ -35,6 +35,7 @@ jobs:
+       matrix:
+         target:
+           - '6.12'
++          - '6.14'
+     steps:
+ 
+       - uses: actions/checkout@v4

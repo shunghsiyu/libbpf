@@ -1,0 +1,27 @@
+Revert "HACK: use commit ID instead of branch name"
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+This reverts commit 84dd46e20610b2fdc27534ea7045942b7e6102d5.
+
+This is currently failing with the error
+
+  fatal: Not a valid object name f491dd2afe1c2cde1cfb59d6f7f0cf28fa34d88e^{commit}
+  fatal: Could not parse object 'f491dd2afe1c2cde1cfb59d6f7f0cf28fa34d88e'.
+---
+ .github/workflows/vmtest.yml |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/.github/workflows/vmtest.yml b/.github/workflows/vmtest.yml
+index c2ae8b2..d5cc9ed 100644
+--- a/.github/workflows/vmtest.yml
++++ b/.github/workflows/vmtest.yml
+@@ -46,7 +46,7 @@ jobs:
+         uses: libbpf/ci/get-linux-source@v3
+         with:
+           repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git'
+-          rev: 'f491dd2afe1c2cde1cfb59d6f7f0cf28fa34d88e' # Latest linux-6.12.y
++          rev: 'linux-6.12.y'
+           dest: '${{ github.workspace }}/.kernel'
+ 
+       - name: Patch kernel source

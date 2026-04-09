@@ -1,0 +1,31 @@
+Remove 6.14 from testing, test 6.15 instead.
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ .github/workflows/test.yml |    4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
+index 8b67c5e..bd3af40 100644
+--- a/.github/workflows/test.yml
++++ b/.github/workflows/test.yml
+@@ -16,7 +16,7 @@ jobs:
+       fail-fast: false
+       matrix:
+         include:
+-          - kernel: '6.14'
++          - kernel: '6.15'
+             runs_on: 'ubuntu-24.04'
+             arch: 'x86_64'
+             llvm-version: '18'
+@@ -39,7 +39,7 @@ jobs:
+       fail-fast: false
+       matrix:
+         include:
+-          - kernel: '6.15'
++          - kernel: '6.16'
+             runs_on: 'ubuntu-24.04'
+             arch: 'x86_64'
+             llvm-version: '18'

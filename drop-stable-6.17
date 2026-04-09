@@ -1,0 +1,27 @@
+Drop stable 6.17
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+It is no longer maintained.
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ .github/workflows/test.yml |    5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
+index 5d8e364..2709b1c 100644
+--- a/.github/workflows/test.yml
++++ b/.github/workflows/test.yml
+@@ -21,11 +21,6 @@ jobs:
+             arch: 'x86_64'
+             llvm-version: '22'
+             pahole: 'master'
+-          - kernel: '6.17'
+-            runs_on: 'ubuntu-24.04'
+-            arch: 'x86_64'
+-            llvm-version: '21'
+-            pahole: 'master'
+           - kernel: '6.12'
+             runs_on: 'ubuntu-24.04'
+             arch: 'x86_64'

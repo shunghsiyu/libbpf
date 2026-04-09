@@ -1,0 +1,33 @@
+Drop the LATEST constraints in vmtest-opensuse.yml
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+We want to always build everything from scratch when testing openSUSE
+kernels.
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ .github/workflows/vmtest-opensuse.yml |    3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/.github/workflows/vmtest-opensuse.yml b/.github/workflows/vmtest-opensuse.yml
+index e47b550..ec1cf64 100644
+--- a/.github/workflows/vmtest-opensuse.yml
++++ b/.github/workflows/vmtest-opensuse.yml
+@@ -74,7 +74,6 @@ jobs:
+           cd -
+ 
+       - name: Build kernel image
+-        if: ${{ inputs.kernel == 'LATEST' }}
+         shell: bash
+         run: |
+           cd .kernel
+@@ -87,7 +86,7 @@ jobs:
+         env:
+           MAX_MAKE_JOBS: 32
+           VMLINUX_BTF: ${{ github.workspace }}/vmlinux
+-          VMLINUX_H: ${{ inputs.kernel != 'LATEST' && format('{0}/.github/actions/build-selftests/vmlinux.h', github.workspace) || '' }}
++          VMLINUX_H: ''
+         with:
+           arch: ${{ inputs.arch }}
+           kernel-root: ${{ github.workspace }}/.kernel

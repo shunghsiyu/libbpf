@@ -1,0 +1,38 @@
+Downgrade LLVM from 22 to 21.
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+It seems https://apt.llvm.org/llvm.sh is not correctly installation LLVM
+22 nor 23 (see llvm/llvm-project#180163). Move back to LLVM 21 for now
+while the script updates.
+
+Stable Linux 6.18 probably will be better off using LLVM 21 anyway, it
+is likely better tested with it.
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ .github/workflows/test.yml |    4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
+index 3339eaf..690c3bd 100644
+--- a/.github/workflows/test.yml
++++ b/.github/workflows/test.yml
+@@ -19,7 +19,7 @@ jobs:
+           - kernel: '6.18'
+             runs_on: 'ubuntu-24.04'
+             arch: 'x86_64'
+-            llvm-version: '22'
++            llvm-version: '21'
+             pahole: 'master'
+           - kernel: '6.12'
+             runs_on: 'ubuntu-24.04'
+@@ -47,7 +47,7 @@ jobs:
+           - kernel: 'LATEST'
+             runs_on: 'ubuntu-24.04'
+             arch: 'x86_64'
+-            llvm-version: '22'
++            llvm-version: '21'
+             pahole: 'master'
+     name: Mainline Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
+     uses: ./.github/workflows/vmtest-mainline.yml

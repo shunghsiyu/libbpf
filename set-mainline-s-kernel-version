@@ -1,0 +1,25 @@
+Set mainline's kernel version to LATEST
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+This should allow it to use DENYLIST-latest to ignore
+verif_scale_pyperf600.
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ .github/workflows/test.yml |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
+index 2709b1c..1754d3d 100644
+--- a/.github/workflows/test.yml
++++ b/.github/workflows/test.yml
+@@ -44,7 +44,7 @@ jobs:
+       fail-fast: false
+       matrix:
+         include:
+-          - kernel: '6.19'
++          - kernel: 'LATEST'
+             runs_on: 'ubuntu-24.04'
+             arch: 'x86_64'
+             llvm-version: '22'

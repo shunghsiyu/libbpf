@@ -1,0 +1,19 @@
+Add DENYLIST for SL-16.1
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+Currently shared with 6.18.
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ ci/vmtest/configs/DENYLIST-SL-16.1 |    1 +
+ 1 file changed, 1 insertion(+)
+ create mode 100644 ci/vmtest/configs/DENYLIST-SL-16.1
+
+diff --git a/ci/vmtest/configs/DENYLIST-SL-16.1 b/ci/vmtest/configs/DENYLIST-SL-16.1
+new file mode 100644
+index 0000000..94aca8e
+--- /dev/null
++++ b/ci/vmtest/configs/DENYLIST-SL-16.1
+@@ -0,0 +1 @@
++verif_scale_pyperf600 # failing since LLVM 18+

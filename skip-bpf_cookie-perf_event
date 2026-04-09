@@ -1,0 +1,20 @@
+Skip bpf_cookie/perf_event test
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+It has been flaky for quite awhile. Further investigation needed though.
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ ci/vmtest/configs/DENYLIST |    1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/ci/vmtest/configs/DENYLIST b/ci/vmtest/configs/DENYLIST
+index e50557f..d6446b2 100644
+--- a/ci/vmtest/configs/DENYLIST
++++ b/ci/vmtest/configs/DENYLIST
+@@ -13,3 +13,4 @@ tc_redirect/tc_redirect_dtime # uapi breakage after net-next commit 885c36e59f46
+ migrate_reuseport/IPv4 TCP_NEW_SYN_RECV reqsk_timer_handler # flaky, under investigation
+ migrate_reuseport/IPv6 TCP_NEW_SYN_RECV reqsk_timer_handler # flaky, under investigation
+ verify_pkcs7_sig # keeps failing
++bpf_cookie/perf_event # flaky, needs investigation

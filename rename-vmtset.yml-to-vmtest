@@ -1,0 +1,309 @@
+Rename vmtset.yml to vmtest-stable.yml
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+This pave the way for adding daily testing of SLES kernels.
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ .github/workflows/test.yml          |    4 +
+ .github/workflows/vmtest-stable.yml |  130 +++++++++++++++++++++++++++++++++++
+ .github/workflows/vmtest.yml        |  130 -----------------------------------
+ 3 files changed, 132 insertions(+), 132 deletions(-)
+ create mode 100644 .github/workflows/vmtest-stable.yml
+ delete mode 100644 .github/workflows/vmtest.yml
+
+diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
+index 565c3c0..a65a10f 100644
+--- a/.github/workflows/test.yml
++++ b/.github/workflows/test.yml
+@@ -11,7 +11,7 @@ concurrency:
+   cancel-in-progress: true
+ 
+ jobs:
+-  vmtest:
++  vmtest-stable:
+     strategy:
+       fail-fast: false
+       matrix:
+@@ -27,7 +27,7 @@ jobs:
+             llvm-version: '18'
+             pahole: 'master'
+     name: Stable Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
+-    uses: ./.github/workflows/vmtest.yml
++    uses: ./.github/workflows/vmtest-stable.yml
+     with:
+       runs_on: ${{ matrix.runs_on }}
+       kernel: ${{ matrix.kernel }}
+diff --git a/.github/workflows/vmtest-stable.yml b/.github/workflows/vmtest-stable.yml
+new file mode 100644
+index 0000000..bdbdbe0
+--- /dev/null
++++ b/.github/workflows/vmtest-stable.yml
+@@ -0,0 +1,130 @@
++name: 'Build kernel and selftests/bpf, run selftests via vmtest'
++
++on:
++  workflow_call:
++    inputs:
++      runs_on:
++        required: true
++        default: 'ubuntu-24.04'
++        type: string
++      arch:
++        description: 'what arch to test'
++        required: true
++        default: 'x86_64'
++        type: string
++      kernel:
++        description: 'kernel version or LATEST'
++        required: true
++        default: 'LATEST'
++        type: string
++      pahole:
++        description: 'pahole rev or branch'
++        required: false
++        default: 'master'
++        type: string
++      llvm-version:
++        description: 'llvm version'
++        required: false
++        default: '18'
++        type: string
++jobs:
++  vmtest:
++    name: pahole@${{ inputs.pahole }}
++    runs-on: ${{ inputs.runs_on }}
++    steps:
++
++      - uses: actions/checkout@v4
++
++      - name: Setup environment
++        uses: libbpf/ci/setup-build-env@v3
++        with:
++          pahole: ${{ inputs.pahole }}
++          arch: ${{ inputs.arch }}
++          llvm-version: ${{ inputs.llvm-version }}
++
++      - name: Get kernel source at checkpoint
++        uses: shunghsiyu/libbpf-ci/get-linux-source@v3
++        with:
++          repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git'
++          rev: 'linux-${{ inputs.kernel }}.y'
++          dest: '${{ github.workspace }}/.kernel'
++
++      - name: Get queued stable patches
++        shell: bash
++        run: |
++          git clone --branch 'master' --single-branch --filter=blob:none --depth=1 --sparse 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/stable-queue.git' '${{ github.workspace }}/.stable-queue'
++          cd '${{ github.workspace }}/.stable-queue'
++          if ! grep -e '^${{ inputs.kernel }}$' active_kernel_versions >/dev/null; then
++          	echo 'Stable ${{ inputs.kernel }} not actively maintained anymore, failing'
++          	exit 1
++          fi
++          git sparse-checkout set 'queue-${{ inputs.kernel }}/'
++
++      - name: Apply queued stable patches
++        shell: bash
++        run: |
++          cd '${{ github.workspace }}/.kernel'
++          if [[ ! -d '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/' ]]; then
++          	echo "No patch in stable-queue, skipping!"
++          	exit
++          fi
++          cat '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/series' | while read file; do
++          	if patch --dry-run -N --silent -p1 -s < '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/'"$file" 2>/dev/null; then
++          		patch -s -p1 < '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/'"$file" 2>/dev/null
++          		echo "Successfully applied ${file}!"
++          	else
++          		echo "Failed to apply ${file}, skipping!"
++          	fi
++          done
++
++      - name: Patch kernel source
++        uses: libbpf/ci/patch-kernel@v3
++        with:
++          patches-root: '${{ github.workspace }}/ci/diffs'
++          repo-root: '.kernel'
++
++      - name: Configure kernel build
++        shell: bash
++        run: |
++          cd .kernel
++          cat tools/testing/selftests/bpf/config \
++              tools/testing/selftests/bpf/config.${{ inputs.arch }} > .config
++          # this file might or might not exist depending on kernel version
++          cat tools/testing/selftests/bpf/config.vm >> .config || :
++          make olddefconfig && make prepare
++          cd -
++
++      - name: Build kernel image
++        shell: bash
++        run: |
++          cd .kernel
++          make -j $((4*$(nproc))) all
++          cp vmlinux ${{ github.workspace }}
++          cd -
++
++      - name: Build selftests/bpf
++        uses: libbpf/ci/build-selftests@v3
++        env:
++          MAX_MAKE_JOBS: 32
++          VMLINUX_BTF: ${{ github.workspace }}/vmlinux
++          VMLINUX_H: ''
++        with:
++          arch: ${{ inputs.arch }}
++          kernel-root: ${{ github.workspace }}/.kernel
++          llvm-version: ${{ inputs.llvm-version }}
++
++      - name: Run selftests
++        env:
++          ALLOWLIST_FILE: /tmp/allowlist
++          DENYLIST_FILE: /tmp/denylist
++          KERNEL: ${{ inputs.kernel }}
++          VMLINUX: ${{ github.workspace }}/vmlinux
++          LLVM_VERSION: ${{ inputs.llvm-version }}
++          SELFTESTS_BPF: ${{ github.workspace }}/.kernel/tools/testing/selftests/bpf
++          VMTEST_CONFIGS: ${{ github.workspace }}/ci/vmtest/configs
++        uses: libbpf/ci/run-vmtest@v3
++        with:
++          arch: ${{ inputs.arch }}
++          kbuild-output: ${{ github.workspace }}/.kernel
++          kernel-root: ${{ github.workspace }}/.kernel
++          vmlinuz: ${{ inputs.arch }}/vmlinuz-${{ inputs.kernel }}
+diff --git a/.github/workflows/vmtest.yml b/.github/workflows/vmtest.yml
+deleted file mode 100644
+index bdbdbe0..0000000
+--- a/.github/workflows/vmtest.yml
++++ /dev/null
+@@ -1,130 +0,0 @@
+-name: 'Build kernel and selftests/bpf, run selftests via vmtest'
+-
+-on:
+-  workflow_call:
+-    inputs:
+-      runs_on:
+-        required: true
+-        default: 'ubuntu-24.04'
+-        type: string
+-      arch:
+-        description: 'what arch to test'
+-        required: true
+-        default: 'x86_64'
+-        type: string
+-      kernel:
+-        description: 'kernel version or LATEST'
+-        required: true
+-        default: 'LATEST'
+-        type: string
+-      pahole:
+-        description: 'pahole rev or branch'
+-        required: false
+-        default: 'master'
+-        type: string
+-      llvm-version:
+-        description: 'llvm version'
+-        required: false
+-        default: '18'
+-        type: string
+-jobs:
+-  vmtest:
+-    name: pahole@${{ inputs.pahole }}
+-    runs-on: ${{ inputs.runs_on }}
+-    steps:
+-
+-      - uses: actions/checkout@v4
+-
+-      - name: Setup environment
+-        uses: libbpf/ci/setup-build-env@v3
+-        with:
+-          pahole: ${{ inputs.pahole }}
+-          arch: ${{ inputs.arch }}
+-          llvm-version: ${{ inputs.llvm-version }}
+-
+-      - name: Get kernel source at checkpoint
+-        uses: shunghsiyu/libbpf-ci/get-linux-source@v3
+-        with:
+-          repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git'
+-          rev: 'linux-${{ inputs.kernel }}.y'
+-          dest: '${{ github.workspace }}/.kernel'
+-
+-      - name: Get queued stable patches
+-        shell: bash
+-        run: |
+-          git clone --branch 'master' --single-branch --filter=blob:none --depth=1 --sparse 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/stable-queue.git' '${{ github.workspace }}/.stable-queue'
+-          cd '${{ github.workspace }}/.stable-queue'
+-          if ! grep -e '^${{ inputs.kernel }}$' active_kernel_versions >/dev/null; then
+-          	echo 'Stable ${{ inputs.kernel }} not actively maintained anymore, failing'
+-          	exit 1
+-          fi
+-          git sparse-checkout set 'queue-${{ inputs.kernel }}/'
+-
+-      - name: Apply queued stable patches
+-        shell: bash
+-        run: |
+-          cd '${{ github.workspace }}/.kernel'
+-          if [[ ! -d '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/' ]]; then
+-          	echo "No patch in stable-queue, skipping!"
+-          	exit
+-          fi
+-          cat '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/series' | while read file; do
+-          	if patch --dry-run -N --silent -p1 -s < '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/'"$file" 2>/dev/null; then
+-          		patch -s -p1 < '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/'"$file" 2>/dev/null
+-          		echo "Successfully applied ${file}!"
+-          	else
+-          		echo "Failed to apply ${file}, skipping!"
+-          	fi
+-          done
+-
+-      - name: Patch kernel source
+-        uses: libbpf/ci/patch-kernel@v3
+-        with:
+-          patches-root: '${{ github.workspace }}/ci/diffs'
+-          repo-root: '.kernel'
+-
+-      - name: Configure kernel build
+-        shell: bash
+-        run: |
+-          cd .kernel
+-          cat tools/testing/selftests/bpf/config \
+-              tools/testing/selftests/bpf/config.${{ inputs.arch }} > .config
+-          # this file might or might not exist depending on kernel version
+-          cat tools/testing/selftests/bpf/config.vm >> .config || :
+-          make olddefconfig && make prepare
+-          cd -
+-
+-      - name: Build kernel image
+-        shell: bash
+-        run: |
+-          cd .kernel
+-          make -j $((4*$(nproc))) all
+-          cp vmlinux ${{ github.workspace }}
+-          cd -
+-
+-      - name: Build selftests/bpf
+-        uses: libbpf/ci/build-selftests@v3
+-        env:
+-          MAX_MAKE_JOBS: 32
+-          VMLINUX_BTF: ${{ github.workspace }}/vmlinux
+-          VMLINUX_H: ''
+-        with:
+-          arch: ${{ inputs.arch }}
+-          kernel-root: ${{ github.workspace }}/.kernel
+-          llvm-version: ${{ inputs.llvm-version }}
+-
+-      - name: Run selftests
+-        env:
+-          ALLOWLIST_FILE: /tmp/allowlist
+-          DENYLIST_FILE: /tmp/denylist
+-          KERNEL: ${{ inputs.kernel }}
+-          VMLINUX: ${{ github.workspace }}/vmlinux
+-          LLVM_VERSION: ${{ inputs.llvm-version }}
+-          SELFTESTS_BPF: ${{ github.workspace }}/.kernel/tools/testing/selftests/bpf
+-          VMTEST_CONFIGS: ${{ github.workspace }}/ci/vmtest/configs
+-        uses: libbpf/ci/run-vmtest@v3
+-        with:
+-          arch: ${{ inputs.arch }}
+-          kbuild-output: ${{ github.workspace }}/.kernel
+-          kernel-root: ${{ github.workspace }}/.kernel
+-          vmlinuz: ${{ inputs.arch }}/vmlinuz-${{ inputs.kernel }}

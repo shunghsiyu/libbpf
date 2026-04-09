@@ -1,0 +1,40 @@
+Allow version-specific patching of stable kernels
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+The version specific patch would live in separate directly under
+ci/diffs, e.g.:
+- /ci/diffs/6.12
+- /ci/diffs/6.6
+
+Use `format()` instead of direct string interpolation otherwise the
+conditional will not work as intended, and we get the following warning:
+
+  Conditional expression contains literal text outside replacement
+  tokens. This will cause the expression to always evaluate to truthy.
+  Did you mean to put the entire expression inside ${{ }}?
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ .github/workflows/vmtest-stable.yml |    8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/.github/workflows/vmtest-stable.yml b/.github/workflows/vmtest-stable.yml
+index bdbdbe0..f9e151b 100644
+--- a/.github/workflows/vmtest-stable.yml
++++ b/.github/workflows/vmtest-stable.yml
+@@ -77,6 +77,14 @@ jobs:
+           	fi
+           done
+ 
++      - name: Patch kernel source (specific)
++        uses: libbpf/ci/patch-kernel@v3
++        # Only run when the kernel-specific directory exists
++        if: hashFiles(format('ci/diffs/{0}/**', inputs.kernel)) != ''
++        with:
++          patches-root: '${{ github.workspace }}/ci/diffs/${{ inputs.kernel }}/'
++          repo-root: '.kernel'
++
+       - name: Patch kernel source
+         uses: libbpf/ci/patch-kernel@v3
+         with:

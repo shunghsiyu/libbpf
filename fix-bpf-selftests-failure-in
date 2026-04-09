@@ -1,0 +1,489 @@
+Fix BPF selftests failure in stable/linux-6.12.y
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+Fix test failure in the following:
+- raw_tp_null
+- xdp_devmap_attach
+- sockmap_ktls
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ ...lftests-bpf-Fix-raw_tp-null-handling-test.patch |    4 -
+ ...pf-Mitigate-sockmap_ktls-disconnect_after.patch |   45 -------
+ ...pf-Mitigate-sockmap_ktls-disconnect_after.patch |   46 +++++++
+ ...pf-fix-bpf_map_redirect-call-for-cpu-map-.patch |   43 +++++++
+ ...pf-make-xdp_cpumap_attach-keep-redirect-p.patch |  128 ++++++++++++++++++++
+ ...pf-check-program-redirect-in-xdp_cpumap_a.patch |   71 +++++++++++
+ ...sts-bpf-Adjust-data-size-to-have-ETH_HLEN.patch |   80 +++++++++++++
+ 7 files changed, 370 insertions(+), 47 deletions(-)
+ delete mode 100644 ci/diffs/0001-selftests-bpf-Mitigate-sockmap_ktls-disconnect_after.patch
+ create mode 100644 ci/diffs/0002-selftests-bpf-Mitigate-sockmap_ktls-disconnect_after.patch
+ create mode 100644 ci/diffs/0003-selftests-bpf-fix-bpf_map_redirect-call-for-cpu-map-.patch
+ create mode 100644 ci/diffs/0004-selftests-bpf-make-xdp_cpumap_attach-keep-redirect-p.patch
+ create mode 100644 ci/diffs/0005-selftests-bpf-check-program-redirect-in-xdp_cpumap_a.patch
+ create mode 100644 ci/diffs/0006-selftests-bpf-Adjust-data-size-to-have-ETH_HLEN.patch
+
+diff --git a/ci/diffs/0001-selftests-bpf-Fix-raw_tp-null-handling-test.patch b/ci/diffs/0001-selftests-bpf-Fix-raw_tp-null-handling-test.patch
+index 0450d4f..3715b81 100644
+--- a/ci/diffs/0001-selftests-bpf-Fix-raw_tp-null-handling-test.patch
++++ b/ci/diffs/0001-selftests-bpf-Fix-raw_tp-null-handling-test.patch
+@@ -1,7 +1,7 @@
+-From 08bb25b1348a212c57bcaa65cd85674677832eea Mon Sep 17 00:00:00 2001
++From 4978e97542028929526fde15b7bd284b904246ed Mon Sep 17 00:00:00 2001
+ From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+ Date: Fri, 18 Apr 2025 14:09:00 +0800
+-Subject: [PATCH 1/1] selftests/bpf: Fix raw_tp null handling test
++Subject: [PATCH 1/6] selftests/bpf: Fix raw_tp null handling test
+ 
+ Commit b2fc4b17fc13, backport of upstream commit 838a10bd2ebf ("bpf:
+ Augment raw_tp arguments with PTR_MAYBE_NULL"), was missing the changes
+diff --git a/ci/diffs/0001-selftests-bpf-Mitigate-sockmap_ktls-disconnect_after.patch b/ci/diffs/0001-selftests-bpf-Mitigate-sockmap_ktls-disconnect_after.patch
+deleted file mode 100644
+index 78e76cb..0000000
+--- a/ci/diffs/0001-selftests-bpf-Mitigate-sockmap_ktls-disconnect_after.patch
++++ /dev/null
+@@ -1,45 +0,0 @@
+-From 82303a059aab1e9c5f3d7248964d6c9549a60c1f Mon Sep 17 00:00:00 2001
+-From: Ihor Solodrai <ihor.solodrai@linux.dev>
+-Date: Wed, 16 Apr 2025 10:02:46 -0700
+-Subject: [PATCH 1/1] selftests/bpf: Mitigate sockmap_ktls
+- disconnect_after_delete failure
+-
+-"sockmap_ktls disconnect_after_delete" test has been failing on BPF CI
+-after recent merges from netdev:
+-* https://github.com/kernel-patches/bpf/actions/runs/14458537639
+-* https://github.com/kernel-patches/bpf/actions/runs/14457178732
+-
+-It happens because disconnect has been disabled for TLS [1], and it
+-renders the test case invalid.
+-
+-Removing all the test code creates a conflict between bpf and
+-bpf-next, so for now only remove the offending assert [2].
+-
+-The test will be removed later on bpf-next.
+-
+-[1] https://lore.kernel.org/netdev/20250404180334.3224206-1-kuba@kernel.org/
+-[2] https://lore.kernel.org/bpf/cfc371285323e1a3f3b006bfcf74e6cf7ad65258@linux.dev/
+-
+-Signed-off-by: Ihor Solodrai <ihor.solodrai@linux.dev>
+-Signed-off-by: Andrii Nakryiko <andrii@kernel.org>
+-Reviewed-by: Jiayuan Chen <jiayuan.chen@linux.dev>
+-Link: https://lore.kernel.org/bpf/20250416170246.2438524-1-ihor.solodrai@linux.dev
+----
+- tools/testing/selftests/bpf/prog_tests/sockmap_ktls.c | 1 -
+- 1 file changed, 1 deletion(-)
+-
+-diff --git a/tools/testing/selftests/bpf/prog_tests/sockmap_ktls.c b/tools/testing/selftests/bpf/prog_tests/sockmap_ktls.c
+-index 2d0796314862..0a99fd404f6d 100644
+---- a/tools/testing/selftests/bpf/prog_tests/sockmap_ktls.c
+-+++ b/tools/testing/selftests/bpf/prog_tests/sockmap_ktls.c
+-@@ -68,7 +68,6 @@ static void test_sockmap_ktls_disconnect_after_delete(int family, int map)
+- 		goto close_cli;
+- 
+- 	err = disconnect(cli);
+--	ASSERT_OK(err, "disconnect");
+- 
+- close_cli:
+- 	close(cli);
+--- 
+-2.49.0
+-
+diff --git a/ci/diffs/0002-selftests-bpf-Mitigate-sockmap_ktls-disconnect_after.patch b/ci/diffs/0002-selftests-bpf-Mitigate-sockmap_ktls-disconnect_after.patch
+new file mode 100644
+index 0000000..4d61f11
+--- /dev/null
++++ b/ci/diffs/0002-selftests-bpf-Mitigate-sockmap_ktls-disconnect_after.patch
+@@ -0,0 +1,46 @@
++From 5c4433b7f764fe1bddcc5936efd5ee145bb76006 Mon Sep 17 00:00:00 2001
++From: Ihor Solodrai <ihor.solodrai@linux.dev>
++Date: Wed, 16 Apr 2025 10:02:46 -0700
++Subject: [PATCH 2/6] selftests/bpf: Mitigate sockmap_ktls
++ disconnect_after_delete failure
++
++"sockmap_ktls disconnect_after_delete" test has been failing on BPF CI
++after recent merges from netdev:
++* https://github.com/kernel-patches/bpf/actions/runs/14458537639
++* https://github.com/kernel-patches/bpf/actions/runs/14457178732
++
++It happens because disconnect has been disabled for TLS [1], and it
++renders the test case invalid.
++
++Removing all the test code creates a conflict between bpf and
++bpf-next, so for now only remove the offending assert [2].
++
++The test will be removed later on bpf-next.
++
++[1] https://lore.kernel.org/netdev/20250404180334.3224206-1-kuba@kernel.org/
++[2] https://lore.kernel.org/bpf/cfc371285323e1a3f3b006bfcf74e6cf7ad65258@linux.dev/
++
++Signed-off-by: Ihor Solodrai <ihor.solodrai@linux.dev>
++Signed-off-by: Andrii Nakryiko <andrii@kernel.org>
++Reviewed-by: Jiayuan Chen <jiayuan.chen@linux.dev>
++Link: https://lore.kernel.org/bpf/20250416170246.2438524-1-ihor.solodrai@linux.dev
++Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
++---
++ tools/testing/selftests/bpf/prog_tests/sockmap_ktls.c | 1 -
++ 1 file changed, 1 deletion(-)
++
++diff --git a/tools/testing/selftests/bpf/prog_tests/sockmap_ktls.c b/tools/testing/selftests/bpf/prog_tests/sockmap_ktls.c
++index 2d0796314862..0a99fd404f6d 100644
++--- a/tools/testing/selftests/bpf/prog_tests/sockmap_ktls.c
+++++ b/tools/testing/selftests/bpf/prog_tests/sockmap_ktls.c
++@@ -68,7 +68,6 @@ static void test_sockmap_ktls_disconnect_after_delete(int family, int map)
++ 		goto close_cli;
++ 
++ 	err = disconnect(cli);
++-	ASSERT_OK(err, "disconnect");
++ 
++ close_cli:
++ 	close(cli);
++-- 
++2.49.0
++
+diff --git a/ci/diffs/0003-selftests-bpf-fix-bpf_map_redirect-call-for-cpu-map-.patch b/ci/diffs/0003-selftests-bpf-fix-bpf_map_redirect-call-for-cpu-map-.patch
+new file mode 100644
+index 0000000..b1c5f81
+--- /dev/null
++++ b/ci/diffs/0003-selftests-bpf-fix-bpf_map_redirect-call-for-cpu-map-.patch
+@@ -0,0 +1,43 @@
++From 660e3fbb64e884f509849d1ae19f8b5870634b4a Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Alexis=20Lothor=C3=A9=20=28eBPF=20Foundation=29?=
++ <alexis.lothore@bootlin.com>
++Date: Wed, 9 Oct 2024 12:12:07 +0200
++Subject: [PATCH 3/6] selftests/bpf: fix bpf_map_redirect call for cpu map test
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++xdp_redir_prog currently redirects packets based on the entry at index 1
++in cpu_map, but the corresponding test only manipulates the entry at
++index 0. This does not really affect the test in its current form since
++the program is detached before having the opportunity to execute, but it
++needs to be fixed before being able improve the corresponding test (ie,
++not only test attach/detach but also the redirect feature)
++
++Fix this XDP program by making it redirect packets based on entry 0 in
++cpu_map instead of entry 1.
++
++Signed-off-by: Alexis Lothoré (eBPF Foundation) <alexis.lothore@bootlin.com>
++Link: https://lore.kernel.org/r/20241009-convert_xdp_tests-v3-1-51cea913710c@bootlin.com
++Signed-off-by: Martin KaFai Lau <martin.lau@kernel.org>
++Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
++---
++ .../testing/selftests/bpf/progs/test_xdp_with_cpumap_helpers.c  | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/tools/testing/selftests/bpf/progs/test_xdp_with_cpumap_helpers.c b/tools/testing/selftests/bpf/progs/test_xdp_with_cpumap_helpers.c
++index 20ec6723df18..d848fe96924e 100644
++--- a/tools/testing/selftests/bpf/progs/test_xdp_with_cpumap_helpers.c
+++++ b/tools/testing/selftests/bpf/progs/test_xdp_with_cpumap_helpers.c
++@@ -15,7 +15,7 @@ struct {
++ SEC("xdp")
++ int xdp_redir_prog(struct xdp_md *ctx)
++ {
++-	return bpf_redirect_map(&cpu_map, 1, 0);
+++	return bpf_redirect_map(&cpu_map, 0, 0);
++ }
++ 
++ SEC("xdp")
++-- 
++2.49.0
++
+diff --git a/ci/diffs/0004-selftests-bpf-make-xdp_cpumap_attach-keep-redirect-p.patch b/ci/diffs/0004-selftests-bpf-make-xdp_cpumap_attach-keep-redirect-p.patch
+new file mode 100644
+index 0000000..7d2d25b
+--- /dev/null
++++ b/ci/diffs/0004-selftests-bpf-make-xdp_cpumap_attach-keep-redirect-p.patch
+@@ -0,0 +1,128 @@
++From 12addd2d88ea8a79e39d486ffbb63277fa0b813d Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Alexis=20Lothor=C3=A9=20=28eBPF=20Foundation=29?=
++ <alexis.lothore@bootlin.com>
++Date: Wed, 9 Oct 2024 12:12:08 +0200
++Subject: [PATCH 4/6] selftests/bpf: make xdp_cpumap_attach keep redirect prog
++ attached
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Current test only checks attach/detach on cpu map type program, and so
++does not check that it can be properly executed, neither that it
++redirects correctly.
++
++Update the existing test to extend its coverage:
++- keep the redirected program loaded
++- try to execute it through bpf_prog_test_run_opts with some dummy
++  context
++
++While at it, bring the following minor improvements:
++- isolate test interface in its own namespace
++
++Signed-off-by: Alexis Lothoré (eBPF Foundation) <alexis.lothore@bootlin.com>
++Link: https://lore.kernel.org/r/20241009-convert_xdp_tests-v3-2-51cea913710c@bootlin.com
++Signed-off-by: Martin KaFai Lau <martin.lau@kernel.org>
++Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
++---
++ .../bpf/prog_tests/xdp_cpumap_attach.c        | 41 +++++++++++++++----
++ 1 file changed, 33 insertions(+), 8 deletions(-)
++
++diff --git a/tools/testing/selftests/bpf/prog_tests/xdp_cpumap_attach.c b/tools/testing/selftests/bpf/prog_tests/xdp_cpumap_attach.c
++index 481626a875d1..88e8a886d1e6 100644
++--- a/tools/testing/selftests/bpf/prog_tests/xdp_cpumap_attach.c
+++++ b/tools/testing/selftests/bpf/prog_tests/xdp_cpumap_attach.c
++@@ -2,35 +2,41 @@
++ #include <uapi/linux/bpf.h>
++ #include <linux/if_link.h>
++ #include <test_progs.h>
+++#include <network_helpers.h>
++ 
++ #include "test_xdp_with_cpumap_frags_helpers.skel.h"
++ #include "test_xdp_with_cpumap_helpers.skel.h"
++ 
++ #define IFINDEX_LO	1
+++#define TEST_NS "cpu_attach_ns"
++ 
++ static void test_xdp_with_cpumap_helpers(void)
++ {
++-	struct test_xdp_with_cpumap_helpers *skel;
+++	struct test_xdp_with_cpumap_helpers *skel = NULL;
++ 	struct bpf_prog_info info = {};
++ 	__u32 len = sizeof(info);
++ 	struct bpf_cpumap_val val = {
++ 		.qsize = 192,
++ 	};
++-	int err, prog_fd, map_fd;
+++	int err, prog_fd, prog_redir_fd, map_fd;
+++	struct nstoken *nstoken = NULL;
++ 	__u32 idx = 0;
++ 
+++	SYS(out_close, "ip netns add %s", TEST_NS);
+++	nstoken = open_netns(TEST_NS);
+++	if (!ASSERT_OK_PTR(nstoken, "open_netns"))
+++		goto out_close;
+++	SYS(out_close, "ip link set dev lo up");
+++
++ 	skel = test_xdp_with_cpumap_helpers__open_and_load();
++ 	if (!ASSERT_OK_PTR(skel, "test_xdp_with_cpumap_helpers__open_and_load"))
++ 		return;
++ 
++-	prog_fd = bpf_program__fd(skel->progs.xdp_redir_prog);
++-	err = bpf_xdp_attach(IFINDEX_LO, prog_fd, XDP_FLAGS_SKB_MODE, NULL);
+++	prog_redir_fd = bpf_program__fd(skel->progs.xdp_redir_prog);
+++	err = bpf_xdp_attach(IFINDEX_LO, prog_redir_fd, XDP_FLAGS_SKB_MODE, NULL);
++ 	if (!ASSERT_OK(err, "Generic attach of program with 8-byte CPUMAP"))
++ 		goto out_close;
++ 
++-	err = bpf_xdp_detach(IFINDEX_LO, XDP_FLAGS_SKB_MODE, NULL);
++-	ASSERT_OK(err, "XDP program detach");
++-
++ 	prog_fd = bpf_program__fd(skel->progs.xdp_dummy_cm);
++ 	map_fd = bpf_map__fd(skel->maps.cpu_map);
++ 	err = bpf_prog_get_info_by_fd(prog_fd, &info, &len);
++@@ -45,6 +51,23 @@ static void test_xdp_with_cpumap_helpers(void)
++ 	ASSERT_OK(err, "Read cpumap entry");
++ 	ASSERT_EQ(info.id, val.bpf_prog.id, "Match program id to cpumap entry prog_id");
++ 
+++	/* send a packet to trigger any potential bugs in there */
+++	char data[10] = {};
+++	DECLARE_LIBBPF_OPTS(bpf_test_run_opts, opts,
+++			    .data_in = &data,
+++			    .data_size_in = 10,
+++			    .flags = BPF_F_TEST_XDP_LIVE_FRAMES,
+++			    .repeat = 1,
+++		);
+++	err = bpf_prog_test_run_opts(prog_redir_fd, &opts);
+++	ASSERT_OK(err, "XDP test run");
+++
+++	/* wait for the packets to be flushed */
+++	kern_sync_rcu();
+++
+++	err = bpf_xdp_detach(IFINDEX_LO, XDP_FLAGS_SKB_MODE, NULL);
+++	ASSERT_OK(err, "XDP program detach");
+++
++ 	/* can not attach BPF_XDP_CPUMAP program to a device */
++ 	err = bpf_xdp_attach(IFINDEX_LO, prog_fd, XDP_FLAGS_SKB_MODE, NULL);
++ 	if (!ASSERT_NEQ(err, 0, "Attach of BPF_XDP_CPUMAP program"))
++@@ -65,6 +88,8 @@ static void test_xdp_with_cpumap_helpers(void)
++ 	ASSERT_NEQ(err, 0, "Add BPF_XDP program with frags to cpumap entry");
++ 
++ out_close:
+++	close_netns(nstoken);
+++	SYS_NOFAIL("ip netns del %s", TEST_NS);
++ 	test_xdp_with_cpumap_helpers__destroy(skel);
++ }
++ 
++@@ -111,7 +136,7 @@ static void test_xdp_with_cpumap_frags_helpers(void)
++ 	test_xdp_with_cpumap_frags_helpers__destroy(skel);
++ }
++ 
++-void serial_test_xdp_cpumap_attach(void)
+++void test_xdp_cpumap_attach(void)
++ {
++ 	if (test__start_subtest("CPUMAP with programs in entries"))
++ 		test_xdp_with_cpumap_helpers();
++-- 
++2.49.0
++
+diff --git a/ci/diffs/0005-selftests-bpf-check-program-redirect-in-xdp_cpumap_a.patch b/ci/diffs/0005-selftests-bpf-check-program-redirect-in-xdp_cpumap_a.patch
+new file mode 100644
+index 0000000..7dff576
+--- /dev/null
++++ b/ci/diffs/0005-selftests-bpf-check-program-redirect-in-xdp_cpumap_a.patch
+@@ -0,0 +1,71 @@
++From 4d8a11f269b526b802b5e9b74fb60c79309a4724 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Alexis=20Lothor=C3=A9=20=28eBPF=20Foundation=29?=
++ <alexis.lothore@bootlin.com>
++Date: Wed, 9 Oct 2024 12:12:09 +0200
++Subject: [PATCH 5/6] selftests/bpf: check program redirect in
++ xdp_cpumap_attach
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++xdp_cpumap_attach, in its current form, only checks that an xdp cpumap
++program can be executed, but not that it performs correctly the cpu
++redirect as configured by userspace (bpf_prog_test_run_opts will return
++success even if the redirect program returns an error)
++
++Add a check to ensure that the program performs the configured redirect
++as well. The check is based on a global variable incremented by a
++chained program executed only if the redirect program properly executes.
++
++Signed-off-by: Alexis Lothoré (eBPF Foundation) <alexis.lothore@bootlin.com>
++Link: https://lore.kernel.org/r/20241009-convert_xdp_tests-v3-3-51cea913710c@bootlin.com
++Signed-off-by: Martin KaFai Lau <martin.lau@kernel.org>
++Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
++---
++ tools/testing/selftests/bpf/prog_tests/xdp_cpumap_attach.c   | 5 ++++-
++ .../selftests/bpf/progs/test_xdp_with_cpumap_helpers.c       | 5 +++++
++ 2 files changed, 9 insertions(+), 1 deletion(-)
++
++diff --git a/tools/testing/selftests/bpf/prog_tests/xdp_cpumap_attach.c b/tools/testing/selftests/bpf/prog_tests/xdp_cpumap_attach.c
++index 88e8a886d1e6..c7f74f068e78 100644
++--- a/tools/testing/selftests/bpf/prog_tests/xdp_cpumap_attach.c
+++++ b/tools/testing/selftests/bpf/prog_tests/xdp_cpumap_attach.c
++@@ -62,8 +62,11 @@ static void test_xdp_with_cpumap_helpers(void)
++ 	err = bpf_prog_test_run_opts(prog_redir_fd, &opts);
++ 	ASSERT_OK(err, "XDP test run");
++ 
++-	/* wait for the packets to be flushed */
+++	/* wait for the packets to be flushed, then check that redirect has been
+++	 * performed
+++	 */
++ 	kern_sync_rcu();
+++	ASSERT_NEQ(skel->bss->redirect_count, 0, "redirected packets");
++ 
++ 	err = bpf_xdp_detach(IFINDEX_LO, XDP_FLAGS_SKB_MODE, NULL);
++ 	ASSERT_OK(err, "XDP program detach");
++diff --git a/tools/testing/selftests/bpf/progs/test_xdp_with_cpumap_helpers.c b/tools/testing/selftests/bpf/progs/test_xdp_with_cpumap_helpers.c
++index d848fe96924e..3619239b01b7 100644
++--- a/tools/testing/selftests/bpf/progs/test_xdp_with_cpumap_helpers.c
+++++ b/tools/testing/selftests/bpf/progs/test_xdp_with_cpumap_helpers.c
++@@ -12,6 +12,8 @@ struct {
++ 	__uint(max_entries, 4);
++ } cpu_map SEC(".maps");
++ 
+++__u32 redirect_count = 0;
+++
++ SEC("xdp")
++ int xdp_redir_prog(struct xdp_md *ctx)
++ {
++@@ -27,6 +29,9 @@ int xdp_dummy_prog(struct xdp_md *ctx)
++ SEC("xdp/cpumap")
++ int xdp_dummy_cm(struct xdp_md *ctx)
++ {
+++	if (bpf_get_smp_processor_id() == 0)
+++		redirect_count++;
+++
++ 	if (ctx->ingress_ifindex == IFINDEX_LO)
++ 		return XDP_DROP;
++ 
++-- 
++2.49.0
++
+diff --git a/ci/diffs/0006-selftests-bpf-Adjust-data-size-to-have-ETH_HLEN.patch b/ci/diffs/0006-selftests-bpf-Adjust-data-size-to-have-ETH_HLEN.patch
+new file mode 100644
+index 0000000..ef3ba18
+--- /dev/null
++++ b/ci/diffs/0006-selftests-bpf-Adjust-data-size-to-have-ETH_HLEN.patch
+@@ -0,0 +1,80 @@
++From 282f4c071fcaf32246b6dab3df4709eaae15c98c Mon Sep 17 00:00:00 2001
++From: Shigeru Yoshida <syoshida@redhat.com>
++Date: Wed, 22 Jan 2025 00:06:43 +0900
++Subject: [PATCH 6/6] selftests/bpf: Adjust data size to have ETH_HLEN
++
++The function bpf_test_init() now returns an error if user_size
++(.data_size_in) is less than ETH_HLEN, causing the tests to
++fail. Adjust the data size to ensure it meets the requirement of
++ETH_HLEN.
++
++Signed-off-by: Shigeru Yoshida <syoshida@redhat.com>
++Signed-off-by: Martin KaFai Lau <martin.lau@kernel.org>
++Link: https://patch.msgid.link/20250121150643.671650-2-syoshida@redhat.com
++Signed-off-by: Alexei Starovoitov <ast@kernel.org>
++Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
++---
++ .../testing/selftests/bpf/prog_tests/xdp_cpumap_attach.c  | 4 ++--
++ .../testing/selftests/bpf/prog_tests/xdp_devmap_attach.c  | 8 ++++----
++ 2 files changed, 6 insertions(+), 6 deletions(-)
++
++diff --git a/tools/testing/selftests/bpf/prog_tests/xdp_cpumap_attach.c b/tools/testing/selftests/bpf/prog_tests/xdp_cpumap_attach.c
++index c7f74f068e78..df27535995af 100644
++--- a/tools/testing/selftests/bpf/prog_tests/xdp_cpumap_attach.c
+++++ b/tools/testing/selftests/bpf/prog_tests/xdp_cpumap_attach.c
++@@ -52,10 +52,10 @@ static void test_xdp_with_cpumap_helpers(void)
++ 	ASSERT_EQ(info.id, val.bpf_prog.id, "Match program id to cpumap entry prog_id");
++ 
++ 	/* send a packet to trigger any potential bugs in there */
++-	char data[10] = {};
+++	char data[ETH_HLEN] = {};
++ 	DECLARE_LIBBPF_OPTS(bpf_test_run_opts, opts,
++ 			    .data_in = &data,
++-			    .data_size_in = 10,
+++			    .data_size_in = sizeof(data),
++ 			    .flags = BPF_F_TEST_XDP_LIVE_FRAMES,
++ 			    .repeat = 1,
++ 		);
++diff --git a/tools/testing/selftests/bpf/prog_tests/xdp_devmap_attach.c b/tools/testing/selftests/bpf/prog_tests/xdp_devmap_attach.c
++index 27ffed17d4be..461ab18705d5 100644
++--- a/tools/testing/selftests/bpf/prog_tests/xdp_devmap_attach.c
+++++ b/tools/testing/selftests/bpf/prog_tests/xdp_devmap_attach.c
++@@ -23,7 +23,7 @@ static void test_xdp_with_devmap_helpers(void)
++ 	__u32 len = sizeof(info);
++ 	int err, dm_fd, dm_fd_redir, map_fd;
++ 	struct nstoken *nstoken = NULL;
++-	char data[10] = {};
+++	char data[ETH_HLEN] = {};
++ 	__u32 idx = 0;
++ 
++ 	SYS(out_close, "ip netns add %s", TEST_NS);
++@@ -58,7 +58,7 @@ static void test_xdp_with_devmap_helpers(void)
++ 	/* send a packet to trigger any potential bugs in there */
++ 	DECLARE_LIBBPF_OPTS(bpf_test_run_opts, opts,
++ 			    .data_in = &data,
++-			    .data_size_in = 10,
+++			    .data_size_in = sizeof(data),
++ 			    .flags = BPF_F_TEST_XDP_LIVE_FRAMES,
++ 			    .repeat = 1,
++ 		);
++@@ -158,7 +158,7 @@ static void test_xdp_with_devmap_helpers_veth(void)
++ 	struct nstoken *nstoken = NULL;
++ 	__u32 len = sizeof(info);
++ 	int err, dm_fd, dm_fd_redir, map_fd, ifindex_dst;
++-	char data[10] = {};
+++	char data[ETH_HLEN] = {};
++ 	__u32 idx = 0;
++ 
++ 	SYS(out_close, "ip netns add %s", TEST_NS);
++@@ -208,7 +208,7 @@ static void test_xdp_with_devmap_helpers_veth(void)
++ 	/* send a packet to trigger any potential bugs in there */
++ 	DECLARE_LIBBPF_OPTS(bpf_test_run_opts, opts,
++ 			    .data_in = &data,
++-			    .data_size_in = 10,
+++			    .data_size_in = sizeof(data),
++ 			    .flags = BPF_F_TEST_XDP_LIVE_FRAMES,
++ 			    .repeat = 1,
++ 		);
++-- 
++2.49.0
++

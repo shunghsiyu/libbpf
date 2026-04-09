@@ -1,0 +1,77 @@
+Remove more static asserts for kABI workarounds
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ ci/diffs/9999-remove-static-assert.patch  |   16 ----------------
+ ci/diffs/9999-remove-static-assert1.patch |   16 ++++++++++++++++
+ ci/diffs/9999-remove-static-assert2.patch |   13 +++++++++++++
+ 3 files changed, 29 insertions(+), 16 deletions(-)
+ delete mode 100644 ci/diffs/9999-remove-static-assert.patch
+ create mode 100644 ci/diffs/9999-remove-static-assert1.patch
+ create mode 100644 ci/diffs/9999-remove-static-assert2.patch
+
+diff --git a/ci/diffs/9999-remove-static-assert.patch b/ci/diffs/9999-remove-static-assert.patch
+deleted file mode 100644
+index 981b4cb..0000000
+--- a/ci/diffs/9999-remove-static-assert.patch
++++ /dev/null
+@@ -1,16 +0,0 @@
+-diff --git a/include/net/xsk_buff_pool.h b/include/net/xsk_buff_pool.h
+-index 67e516f..136ccba 100644
+---- a/include/net/xsk_buff_pool.h
+-+++ b/include/net/xsk_buff_pool.h
+-@@ -143,11 +143,6 @@ struct __orig_xsk_buff_pool {
+- 	spinlock_t cq_lock;
+- 	struct xdp_buff_xsk *free_heads[];
+- };
+--static_assert(offsetof(struct xsk_buff_pool, queue_id) ==
+--	      offsetof(struct __orig_xsk_buff_pool, queue_id));
+--static_assert(offsetof(struct xsk_buff_pool, fq) ==
+--	      offsetof(struct __orig_xsk_buff_pool, fq));
+--
+- 
+- /* Masks for xdp_umem_page flags.
+-  * The low 12-bits of the addr will be 0 since this is the page address, so we
+diff --git a/ci/diffs/9999-remove-static-assert1.patch b/ci/diffs/9999-remove-static-assert1.patch
+new file mode 100644
+index 0000000..981b4cb
+--- /dev/null
++++ b/ci/diffs/9999-remove-static-assert1.patch
+@@ -0,0 +1,16 @@
++diff --git a/include/net/xsk_buff_pool.h b/include/net/xsk_buff_pool.h
++index 67e516f..136ccba 100644
++--- a/include/net/xsk_buff_pool.h
+++++ b/include/net/xsk_buff_pool.h
++@@ -143,11 +143,6 @@ struct __orig_xsk_buff_pool {
++ 	spinlock_t cq_lock;
++ 	struct xdp_buff_xsk *free_heads[];
++ };
++-static_assert(offsetof(struct xsk_buff_pool, queue_id) ==
++-	      offsetof(struct __orig_xsk_buff_pool, queue_id));
++-static_assert(offsetof(struct xsk_buff_pool, fq) ==
++-	      offsetof(struct __orig_xsk_buff_pool, fq));
++-
++ 
++ /* Masks for xdp_umem_page flags.
++  * The low 12-bits of the addr will be 0 since this is the page address, so we
+diff --git a/ci/diffs/9999-remove-static-assert2.patch b/ci/diffs/9999-remove-static-assert2.patch
+new file mode 100644
+index 0000000..5a789b7
+--- /dev/null
++++ b/ci/diffs/9999-remove-static-assert2.patch
+@@ -0,0 +1,13 @@
++diff --git a/net/mptcp/protocol.h b/net/mptcp/protocol.h
++index f799e51..4a2f84b 100644
++--- a/net/mptcp/protocol.h
+++++ b/net/mptcp/protocol.h
++@@ -440,8 +440,6 @@ struct mptcp_sock {
++ #endif
++ };
++ 
++-static_assert(sizeof(struct mptcp_sock) == sizeof(struct __orig_mptcp_sock));
++-
++ #define mptcp_data_lock(sk) spin_lock_bh(&(sk)->sk_lock.slock)
++ #define mptcp_data_unlock(sk) spin_unlock_bh(&(sk)->sk_lock.slock)
++ 

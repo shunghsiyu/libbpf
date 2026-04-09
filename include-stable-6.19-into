@@ -1,0 +1,47 @@
+Include stable 6.19 into testing.
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+Use 6.18's deny list entries.
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ .github/workflows/test.yml      |    9 +++++++++
+ ci/vmtest/configs/DENYLIST-6.19 |    1 +
+ 2 files changed, 10 insertions(+)
+ create mode 100644 ci/vmtest/configs/DENYLIST-6.19
+
+diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
+index 690c3bd..7ba7434 100644
+--- a/.github/workflows/test.yml
++++ b/.github/workflows/test.yml
+@@ -16,6 +16,13 @@ jobs:
+       fail-fast: false
+       matrix:
+         include:
++          - kernel: '6.19'
++            runs_on: 'ubuntu-24.04'
++            arch: 'x86_64'
++            # Unfortunately as of 2026-02-24 LLVM newer than 21 cannot be
++            # install through apt.llvm.org/llvm.sh yet
++            llvm-version: '21'
++            pahole: 'master'
+           - kernel: '6.18'
+             runs_on: 'ubuntu-24.04'
+             arch: 'x86_64'
+@@ -47,6 +54,8 @@ jobs:
+           - kernel: 'LATEST'
+             runs_on: 'ubuntu-24.04'
+             arch: 'x86_64'
++            # Unfortunately as of 2026-02-24 LLVM newer than 21 cannot be
++            # install through apt.llvm.org/llvm.sh yet
+             llvm-version: '21'
+             pahole: 'master'
+     name: Mainline Linux ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
+diff --git a/ci/vmtest/configs/DENYLIST-6.19 b/ci/vmtest/configs/DENYLIST-6.19
+new file mode 100644
+index 0000000..94aca8e
+--- /dev/null
++++ b/ci/vmtest/configs/DENYLIST-6.19
+@@ -0,0 +1 @@
++verif_scale_pyperf600 # failing since LLVM 18+

@@ -1,0 +1,26 @@
+Ignore stable-queue.git patch application when corresponding patch directory doesn't exist
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+This happens when a stable kernel is just released.
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ .github/workflows/vmtest.yml |    4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/.github/workflows/vmtest.yml b/.github/workflows/vmtest.yml
+index ed6faed..4c9a194 100644
+--- a/.github/workflows/vmtest.yml
++++ b/.github/workflows/vmtest.yml
+@@ -58,6 +58,10 @@ jobs:
+         shell: bash
+         run: |
+           cd '${{ github.workspace }}/.kernel'
++          if [[ ! -d '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/' ]]; then
++          	echo "No patch in stable-queue, skipping!"
++          	exit
++          fi
+           cat '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/series' | while read file; do
+           	if patch --dry-run -N --silent -p1 -s < '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/'"$file" 2>/dev/null; then
+           		patch -s -p1 < '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/'"$file" 2>/dev/null

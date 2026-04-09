@@ -1,0 +1,37 @@
+Remove static asserts for kABI workarounds
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+The static_assert() checks added to make sure kABI workarounds doesn't
+cause any unexpected memory layout change can raise false positive due
+to BPF CI is building the kernel with a different kernel config. Drop
+the problematic ones as a workaround.
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ ci/diffs/9999-remove-static-assert.patch |   16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+ create mode 100644 ci/diffs/9999-remove-static-assert.patch
+
+diff --git a/ci/diffs/9999-remove-static-assert.patch b/ci/diffs/9999-remove-static-assert.patch
+new file mode 100644
+index 0000000..981b4cb
+--- /dev/null
++++ b/ci/diffs/9999-remove-static-assert.patch
+@@ -0,0 +1,16 @@
++diff --git a/include/net/xsk_buff_pool.h b/include/net/xsk_buff_pool.h
++index 67e516f..136ccba 100644
++--- a/include/net/xsk_buff_pool.h
+++++ b/include/net/xsk_buff_pool.h
++@@ -143,11 +143,6 @@ struct __orig_xsk_buff_pool {
++ 	spinlock_t cq_lock;
++ 	struct xdp_buff_xsk *free_heads[];
++ };
++-static_assert(offsetof(struct xsk_buff_pool, queue_id) ==
++-	      offsetof(struct __orig_xsk_buff_pool, queue_id));
++-static_assert(offsetof(struct xsk_buff_pool, fq) ==
++-	      offsetof(struct __orig_xsk_buff_pool, fq));
++-
++ 
++ /* Masks for xdp_umem_page flags.
++  * The low 12-bits of the addr will be 0 since this is the page address, so we

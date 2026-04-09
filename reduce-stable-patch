@@ -1,0 +1,30 @@
+Reduce stable patch application step verbosity
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+Now that they had been working for as while such verbosity is no longer
+needed.
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ .github/workflows/vmtest.yml |    2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/.github/workflows/vmtest.yml b/.github/workflows/vmtest.yml
+index 48c0951..ed6faed 100644
+--- a/.github/workflows/vmtest.yml
++++ b/.github/workflows/vmtest.yml
+@@ -52,13 +52,11 @@ jobs:
+       - name: Get queued stable patches
+         shell: bash
+         run: |
+-          set -eEuxo pipefail
+           git clone --branch 'master' --single-branch --depth=1 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/stable-queue.git' '${{ github.workspace }}/.stable-queue'
+ 
+       - name: Apply queued stable patches
+         shell: bash
+         run: |
+-          set -eEuxo pipefail
+           cd '${{ github.workspace }}/.kernel'
+           cat '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/series' | while read file; do
+           	if patch --dry-run -N --silent -p1 -s < '${{ github.workspace }}/.stable-queue/queue-${{ inputs.kernel }}/'"$file" 2>/dev/null; then
