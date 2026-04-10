@@ -1,0 +1,29 @@
+Drop use of kbuilder-debian-x86_64 container
+
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+
+Stick with the default ubuntu-24.04 container for now as I am running into
+these failures:
+1. shunghsiyu/libbpf-ci/v3/get-linux-source/checkout_latest_kernel.sh: No such
+   file or directory
+2. Unable to locate package clang-18
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ .github/workflows/vmtest-stable.yml |    3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/.github/workflows/vmtest-stable.yml b/.github/workflows/vmtest-stable.yml
+index 7fd170a..15cbcf5 100644
+--- a/.github/workflows/vmtest-stable.yml
++++ b/.github/workflows/vmtest-stable.yml
+@@ -31,9 +31,6 @@ jobs:
+   vmtest:
+     name: pahole@${{ inputs.pahole }}
+     runs-on: ${{ inputs.runs_on }}
+-    container:
+-      image: ghcr.io/kernel-patches/runner:kbuilder-debian-x86_64
+-      options: --privileged
+     steps:
+ 
+       - uses: actions/checkout@v4
