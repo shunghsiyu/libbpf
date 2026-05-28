@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - kernel: '6.19'
+          - kernel: '7.0'
             runs_on: 'ubuntu-24.04'
             arch: 'x86_64'
             # Unfortunately as of 2026-02-24 LLVM newer than 21 cannot be
