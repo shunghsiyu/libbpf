@@ -1,0 +1,35 @@
+name: opensuse-ci
+
+on:
+  push:
+  schedule:
+    - cron:  '0 17 * * *'
+
+concurrency:
+  group: opensuse-ci-test-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  vmtest-opensuse:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - kernel: 'SL-16.0'
+            runs_on: 'ubuntu-24.04'
+            arch: 'x86_64'
+            llvm-version: '18'
+            pahole: 'master'
+          - kernel: 'SL-16.1'
+            runs_on: 'ubuntu-24.04'
+            arch: 'x86_64'
+            llvm-version: '21'
+            pahole: 'master'
+    name: openSUSE ${{ matrix.kernel }} llvm-${{ matrix.llvm-version }}
+    uses: ./.github/workflows/vmtest-opensuse.yml
+    with:
+      runs_on: ${{ matrix.runs_on }}
+      kernel: ${{ matrix.kernel }}
+      arch: ${{ matrix.arch }}
+      llvm-version: ${{ matrix.llvm-version }}
+      pahole: ${{ matrix.pahole }}
