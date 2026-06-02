@@ -33,7 +33,7 @@ jobs:
     runs-on: ${{ inputs.runs_on }}
     steps:
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup environment
         uses: libbpf/ci/setup-build-env@v3
@@ -43,7 +43,7 @@ jobs:
           llvm-version: ${{ inputs.llvm-version }}
 
       - name: Get kernel source at checkpoint
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: 'openSUSE/kernel'
           ref: ${{ inputs.kernel }}
