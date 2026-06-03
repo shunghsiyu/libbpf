@@ -1,0 +1,49 @@
+name: Notify Stable CI result
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron:  '0 20 * * *' # Stable CI runs at 18 * * *
+
+permissions:
+  issues: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Retrieve stable CI result
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        id: ci-result
+        run: |
+          run_id=$(gh run list --workflow=libbpf-ci --limit 30 --json 'databaseId,name,event,status,conclusion,updatedAt' --jq '[.[] | select(.event == "schedule") ] | sort_by(.updatedAt) | last | .databaseId')
+          gh run view "$run_id" --json createdAt,startedAt,conclusion,url,jobs | \
+          jq -r '
+            def icon: if . == "success" then "✓" else "✗" end;
+            def duration:
+              ((.completedAt | fromdateiso8601) - (.startedAt | fromdateiso8601)) as $d
+              | "\(($d / 60) | floor)m\($d % 60)s";
+            def version_key:
+              .name | capture("Linux (?<v>[0-9.]+)") | .v | split(".") | map(tonumber);
+
+            "\(.conclusion | icon) [Stable CI · \(.url | split("/")[-1])](\(.url)) on \(.createdAt)",
+            "",
+            "JOBS",
+            ((.jobs | sort_by(version_key) | reverse)[] | "\( .conclusion | icon) [\(.name)](\(.url)) in \(duration) ")
+          ' >result.txt
+          echo '<details>' >>result.txt
+          echo '<summary>Annotations</summary>' >>result.txt
+          echo >>result.txt
+          gh run view "$run_id" | \
+          sed -e '1,/ANNOTATION/d' | \
+          head -n -4 >>result.txt
+          echo '</details>' >>result.txt
+
+      - name: Notify Specific Issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: 10
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body "$(cat result.txt)"
