@@ -1,0 +1,60 @@
+name: Notify openSUSE CI result
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron:  '0 19 * * *' # openSUSE CI runs at 17 * * *
+
+permissions:
+  issues: write
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Retrieve stable CI result
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        id: ci-result
+        run: |
+          run_id=$(gh run list --workflow=opensuse-ci --limit 30 --json 'databaseId,name,event,status,conclusion,updatedAt' --jq '[.[] | select(.event == "schedule") ] | sort_by(.updatedAt) | last | .databaseId')
+          gh run view "$run_id" >result.txt
+          gh run view "$run_id" --json createdAt,startedAt,conclusion,url,jobs >result.json
+          conclusion=$(jq -r '.conclusion' result.json)
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+
+
+      - name: Format comment
+        if: steps.ci-result.outputs.conclusion != 'success'
+        run: |
+          jq -r '
+            def icon: if . == "success" then "✓" else "✗" end;
+            def duration:
+              ((.completedAt | fromdateiso8601) - (.startedAt | fromdateiso8601)) as $d
+              | "\(($d / 60) | floor)m\($d % 60)s";
+            def version_key:
+              .name | capture("openSUSE SL-(?<v>[0-9.]+)") | .v | split(".") | map(tonumber);
+
+            "\(.conclusion | icon) [openSUSE CI \(.url | split("/")[-1])](\(.url)) schedule on \(.createdAt) FAILED",
+            "",
+            "JOBS",
+            ((.jobs | sort_by(version_key) | reverse)[] | "\( .conclusion | icon) [\(.name)](\(.url)) in \(duration) ")
+          ' result.json >comment.txt
+          echo '<details>' >>comment.txt
+          echo '<summary>Annotations</summary>' >>comment.txt
+          echo >>comment.txt
+          sed -e 'e,/ANNOTATION/d' result.txt | \
+          head -n -4 >>comment.txt
+          echo '</details>' >>comment.txt
+
+      - name: Notify Specific Issue
+        if: steps.ci-result.outputs.conclusion != 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: 11
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body "$(cat comment.txt)"
