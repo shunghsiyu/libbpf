@@ -39,15 +39,14 @@ jobs:
             def version_key:
               .name | capture("openSUSE SL-(?<v>[0-9.]+)") | .v | split(".") | map(tonumber);
 
-            "\(.conclusion | icon) [openSUSE CI \(.url | split("/")[-1])](\(.url)) schedule on \(.createdAt) FAILED",
+            "[openSUSE CI \(.url | split("/")[-1])](\(.url)) schedule on \(.createdAt) FAILED",
             "",
-            "JOBS",
             ((.jobs | sort_by(version_key) | reverse)[] | "\( .conclusion | icon) [\(.name)](\(.url)) in \(duration) ")
           ' result.json >comment.txt
           echo '<details>' >>comment.txt
-          echo '<summary>Annotations</summary>' >>comment.txt
+          echo '<summary>Full details</summary>' >>comment.txt
           echo >>comment.txt
-          sed -e 'e,/ANNOTATION/d' result.txt | \
+          tail -n +2 result.txt | \
           head -n -4 >>comment.txt
           echo '</details>' >>comment.txt
 
