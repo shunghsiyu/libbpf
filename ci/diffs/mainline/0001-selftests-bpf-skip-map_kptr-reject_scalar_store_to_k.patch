@@ -1,0 +1,53 @@
+From 5128a53cd9d23fd1c252221b92d9533bd9dbe14a Mon Sep 17 00:00:00 2001
+From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+Date: Thu, 18 Jun 2026 13:30:43 +0800
+Subject: [PATCH bpf-next 1/1] selftests/bpf: skip
+ map_kptr/reject_scalar_store_to_kptr in cpuv4
+
+The rejection message expected by map_kptr/reject_scalar_store_to_kptr is
+specific to BPF_STX, thus on test_progs-cpuv4, the test will fail due to the
+use of BPF_ST instruction that is only available in v4 instruction set:
+
+  ...
+  6: (15) if r0 == 0x0 goto pc+1        ; R0=map_value(map=array_map,ks=4,vs=32)
+  ; *(volatile u64 *)&v->unref_ptr = 0xBADC0DE; @ map_kptr_fail.c:399
+  7: (7a) *(u64 *)(r0 +8) = 195936478
+  BPF_ST imm must be 0 when storing to kptr at off=8
+  processed 7 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
+  =============
+  EXPECTED   SUBSTR: 'invalid kptr access, R'
+  #214/20  map_kptr/reject_scalar_store_to_kptr:FAIL
+
+There does not seem to be an easy way to have different expected message for
+different cpu flavor. And CAN_USE_BPF_ST merely detects whether the compiler
+supports BPF_ST instruction, but not whether such instruction will be emitted,
+so workaround the failure by guard the test with CAN_USE_BPF_ST macro, similar
+to verifier_bswap.c.
+
+Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
+---
+ tools/testing/selftests/bpf/progs/map_kptr_fail.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/progs/map_kptr_fail.c b/tools/testing/selftests/bpf/progs/map_kptr_fail.c
+index f11848dfa78f..2c888b00fc80 100644
+--- a/tools/testing/selftests/bpf/progs/map_kptr_fail.c
++++ b/tools/testing/selftests/bpf/progs/map_kptr_fail.c
+@@ -385,6 +385,7 @@ int kptr_xchg_possibly_null(struct __sk_buff *ctx)
+ 	return 0;
+ }
+ 
++#ifdef CAN_USE_BPF_ST
+ SEC("?tc")
+ __failure __msg("invalid kptr access, R")
+ int reject_scalar_store_to_kptr(struct __sk_buff *ctx)
+@@ -399,5 +400,6 @@ int reject_scalar_store_to_kptr(struct __sk_buff *ctx)
+ 	*(volatile u64 *)&v->unref_ptr = 0xBADC0DE;
+ 	return 0;
+ }
++#endif
+ 
+ char _license[] SEC("license") = "GPL";
+-- 
+2.54.0
+
