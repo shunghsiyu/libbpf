@@ -1,4 +1,4 @@
-From 5128a53cd9d23fd1c252221b92d9533bd9dbe14a Mon Sep 17 00:00:00 2001
+From 822bba6204e518d37c09b6a06cc9703db8129401 Mon Sep 17 00:00:00 2001
 From: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 Date: Thu, 18 Jun 2026 13:30:43 +0800
 Subject: [PATCH bpf-next 1/1] selftests/bpf: skip
@@ -21,33 +21,31 @@ use of BPF_ST instruction that is only available in v4 instruction set:
 There does not seem to be an easy way to have different expected message for
 different cpu flavor. And CAN_USE_BPF_ST merely detects whether the compiler
 supports BPF_ST instruction, but not whether such instruction will be emitted,
-so workaround the failure by guard the test with CAN_USE_BPF_ST macro, similar
-to verifier_bswap.c.
+so workaround the failure by guard the execpted message with CAN_USE_BPF_ST
+macro.
 
 Signed-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>
 ---
- tools/testing/selftests/bpf/progs/map_kptr_fail.c | 2 ++
- 1 file changed, 2 insertions(+)
+ tools/testing/selftests/bpf/progs/map_kptr_fail.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
 
 diff --git a/tools/testing/selftests/bpf/progs/map_kptr_fail.c b/tools/testing/selftests/bpf/progs/map_kptr_fail.c
-index f11848dfa78f..2c888b00fc80 100644
+index f11848dfa78f..03f260b1e823 100644
 --- a/tools/testing/selftests/bpf/progs/map_kptr_fail.c
 +++ b/tools/testing/selftests/bpf/progs/map_kptr_fail.c
-@@ -385,6 +385,7 @@ int kptr_xchg_possibly_null(struct __sk_buff *ctx)
- 	return 0;
+@@ -386,7 +386,11 @@ int kptr_xchg_possibly_null(struct __sk_buff *ctx)
  }
  
-+#ifdef CAN_USE_BPF_ST
  SEC("?tc")
- __failure __msg("invalid kptr access, R")
- int reject_scalar_store_to_kptr(struct __sk_buff *ctx)
-@@ -399,5 +400,6 @@ int reject_scalar_store_to_kptr(struct __sk_buff *ctx)
- 	*(volatile u64 *)&v->unref_ptr = 0xBADC0DE;
- 	return 0;
- }
+-__failure __msg("invalid kptr access, R")
++__failure
++#ifndef CAN_USE_BPF_ST
++/* BPF_STX-specific error message */
++__msg("invalid kptr access, R")
 +#endif
- 
- char _license[] SEC("license") = "GPL";
+ int reject_scalar_store_to_kptr(struct __sk_buff *ctx)
+ {
+ 	struct map_value *v;
 -- 
 2.54.0
 
