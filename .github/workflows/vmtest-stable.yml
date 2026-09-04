@@ -31,8 +31,11 @@ jobs:
   vmtest:
     name: pahole@${{ inputs.pahole }}
     runs-on: ${{ inputs.runs_on }}
-    steps:
+    env:
+      CILIUM_BUILD_OUTPUT: ${{ github.workspace }}/cilium-build-output
+      ARCH_AND_TOOL: ${{ inputs.arch }}-${{ inputs.llvm-version }}
 
+    steps:
       - uses: actions/checkout@v5
 
       - name: Setup environment
@@ -121,7 +124,14 @@ jobs:
           kernel-root: ${{ github.workspace }}/.kernel
           llvm-version: ${{ inputs.llvm-version }}
 
-      - name: Run selftests
+      - name: Download Cilium BPF programs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CILIUM_BPF_RELEASE_REPO: 'puranjaymohan/cilium-bpf-progs'
+        run: .github/scripts/download-gh-release.sh ${{ env.CILIUM_BPF_RELEASE_REPO }} ${{ env.CILIUM_BUILD_OUTPUT }}
+
+      - name: Run veristat
         env:
           ALLOWLIST_FILE: /tmp/allowlist
           DENYLIST_FILE: /tmp/denylist
@@ -130,9 +140,35 @@ jobs:
           LLVM_VERSION: ${{ inputs.llvm-version }}
           SELFTESTS_BPF: ${{ github.workspace }}/.kernel/tools/testing/selftests/bpf
           VMTEST_CONFIGS: ${{ github.workspace }}/ci/vmtest/configs
-        uses: libbpf/ci/run-vmtest@v3
+          VERISTAT_TARGET: cilium
+        uses: libbpf/ci/run-vmtest@v4
         with:
           arch: ${{ inputs.arch }}
-          kbuild-output: ${{ github.workspace }}/.kernel
-          kernel-root: ${{ github.workspace }}/.kernel
           vmlinuz: ${{ inputs.arch }}/vmlinuz-${{ inputs.kernel }}
+          kernel-root: ${{ github.workspace }}/.kernel
+          kernel-test: run_veristat
+          output-dir: ${{ github.workspace }}
+          kbuild-output: ${{ github.workspace }}/.kernel
+          vmtest-release: v0.18.0
+
+      - name: Compare and save veristat.cilium.csv
+        uses: ./.github/actions/veristat_baseline_compare
+        with:
+          veristat_output: veristat-cilium
+          baseline_name: ${{ env.ARCH_AND_TOOL}}-baseline-veristat-cilium
+
+      # - name: Run selftests
+      #   env:
+      #     ALLOWLIST_FILE: /tmp/allowlist
+      #     DENYLIST_FILE: /tmp/denylist
+      #     KERNEL: ${{ inputs.kernel }}
+      #     VMLINUX: ${{ github.workspace }}/vmlinux
+      #     LLVM_VERSION: ${{ inputs.llvm-version }}
+      #     SELFTESTS_BPF: ${{ github.workspace }}/.kernel/tools/testing/selftests/bpf
+      #     VMTEST_CONFIGS: ${{ github.workspace }}/ci/vmtest/configs
+      #   uses: libbpf/ci/run-vmtest@v3
+      #   with:
+      #     arch: ${{ inputs.arch }}
+      #     kbuild-output: ${{ github.workspace }}/.kernel
+      #     kernel-root: ${{ github.workspace }}/.kernel
+      #     vmlinuz: ${{ inputs.arch }}/vmlinuz-${{ inputs.kernel }}
