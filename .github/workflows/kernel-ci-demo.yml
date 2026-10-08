@@ -13,6 +13,10 @@ on:
   schedule:
     - cron: '23 6 * * *'
 
+env:
+  # Newest stable series to test. Bump it when a new series is released.
+  KERNEL_BRANCH: linux-7.1.y
+
 concurrency:
   group: kernel-ci-demo-${{ github.ref }}
   cancel-in-progress: true
@@ -33,24 +37,21 @@ jobs:
       - name: '2. Get the kernel (latest stable)'
         shell: bash
         run: |
-          # kernel.org publishes the newest stable version as JSON.
-          version=$(curl -fsSL https://www.kernel.org/releases.json | jq -r '.latest_stable.version')
+          # A shallow clone (depth 1) of one stable branch: seconds, not
+          # gigabytes. We use Google's mirror to go easy on kernel.org.
+          git clone --depth 1 --branch "${KERNEL_BRANCH}" --single-branch \
+              https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux .kernel
 
-          # A shallow clone (depth 1) of just that tag: seconds, not gigabytes.
-          git clone --depth 1 --branch "v${version}" --single-branch \
-              https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git .kernel
+          # Ask the kernel's own Makefile which exact release the branch tip is.
+          # This is what `uname -r` must report once we boot it.
+          version=$(make -s -C .kernel kernelversion)
 
-          # `uname -r` of the final x.y release is "x.y.0", but kernel.org calls
-          # it "x.y". Normalize so the test can compare strings exactly.
-          release="${version}"
-          [[ "${release}" =~ ^[0-9]+\.[0-9]+$ ]] && release="${release}.0"
-
-          echo "Testing Linux ${version} (expect uname -r = ${release})"
+          echo "Testing Linux ${version} from branch ${KERNEL_BRANCH}"
           echo "Commit: $(git -C .kernel log -1 --format='%H %s')"
 
           # Hand the answer to the later steps and to the VM.
           echo "KERNEL_VERSION=${version}" >> "${GITHUB_ENV}"
-          echo "${release}" > expected-release
+          echo "${version}" > expected-release
           echo "Testing Linux ${version}" >> "${GITHUB_STEP_SUMMARY}"
 
       # --- 3. Build -----------------------------------------------------------
