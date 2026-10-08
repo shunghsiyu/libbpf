@@ -1,0 +1,4 @@
+/.kernel/
+/test/check_kernel
+/expected-release
+/exitstatus

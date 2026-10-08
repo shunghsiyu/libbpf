@@ -1,0 +1,107 @@
+name: kernel-ci-demo
+
+# Demo for "Building Your Own Linux Kernel CI on Commodity Platforms".
+# Five stages, one step each (see README.md):
+#   1. Trigger   2. Get the kernel   3. Build   4. Boot and test   5. Result
+
+# --- 1. Trigger -------------------------------------------------------------
+# Run on every push, on demand, and once a day (a new stable release shows up
+# roughly weekly, so a daily run picks it up without any extra plumbing).
+on:
+  push:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 6 * * *'
+
+concurrency:
+  group: kernel-ci-demo-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test-latest-stable:
+    name: Test latest stable Linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+
+      - uses: actions/checkout@v5
+
+      # --- 2. Get the kernel --------------------------------------------------
+      - name: '2. Get the kernel (latest stable)'
+        shell: bash
+        run: |
+          # kernel.org publishes the newest stable version as JSON.
+          version=$(curl -fsSL https://www.kernel.org/releases.json | jq -r '.latest_stable.version')
+
+          # A shallow clone (depth 1) of just that tag: seconds, not gigabytes.
+          git clone --depth 1 --branch "v${version}" --single-branch \
+              https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git .kernel
+
+          # `uname -r` of the final x.y release is "x.y.0", but kernel.org calls
+          # it "x.y". Normalize so the test can compare strings exactly.
+          release="${version}"
+          [[ "${release}" =~ ^[0-9]+\.[0-9]+$ ]] && release="${release}.0"
+
+          echo "Testing Linux ${version} (expect uname -r = ${release})"
+          echo "Commit: $(git -C .kernel log -1 --format='%H %s')"
+
+          # Hand the answer to the later steps and to the VM.
+          echo "KERNEL_VERSION=${version}" >> "${GITHUB_ENV}"
+          echo "${release}" > expected-release
+          echo "Testing Linux ${version}" >> "${GITHUB_STEP_SUMMARY}"
+
+      # --- 3. Build -----------------------------------------------------------
+      - name: '3. Build the kernel and the test'
+        shell: bash
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install --no-install-recommends -y flex bison bc libelf-dev libssl-dev
+
+          cd .kernel
+          # Small config: x86 defconfig + the stock KVM-guest fragment + the
+          # few extra options vmtest needs (see ci/kernel.config).
+          make defconfig kvm_guest.config
+          cat ../ci/kernel.config >> .config
+          make olddefconfig
+          make -j"$(nproc)" bzImage
+          cd -
+
+          # The test is a single C file; it runs on the VM's (shared) root fs.
+          gcc -O2 -Wall -Werror -o test/check_kernel test/check_kernel.c
+
+      # --- 4. Boot and test ---------------------------------------------------
+      # Same action as my libbpf CI: boots the kernel under QEMU with vmtest and
+      # runs VMTEST_SCRIPT inside the VM. continue-on-error lets step 5 report.
+      - name: '4. Boot the new kernel in vmtest and run the test'
+        id: vmtest
+        continue-on-error: true
+        uses: libbpf/ci/run-vmtest@v3
+        env:
+          # Anything but 'LATEST' skips the BPF-only bpftool checks.
+          KERNEL: ${{ env.KERNEL_VERSION }}
+          VMLINUX: ${{ github.workspace }}/.kernel/vmlinux
+          VMTEST_SCRIPT: ${{ github.workspace }}/ci/run-in-vm.sh
+        with:
+          arch: x86_64
+          kbuild-output: ${{ github.workspace }}/.kernel
+          kernel-root: ${{ github.workspace }}/.kernel
+
+      # --- 5. Result ----------------------------------------------------------
+      # ci/run-in-vm.sh wrote "check_kernel:<exit code>" into ./exitstatus.
+      # No line at all (VM never booted?) counts as a failure, never a pass.
+      - name: "5. Result (pass/fail from the test's exit code)"
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          code=$(sed -n 's/^check_kernel://p' exitstatus 2>/dev/null || true)
+          echo "vmtest step outcome: ${{ steps.vmtest.outcome }}"
+          echo "check_kernel exit code: '${code}'"
+          if [[ "${code}" == "0" && "${{ steps.vmtest.outcome }}" == "success" ]]; then
+            echo "PASS: booted Linux ${KERNEL_VERSION}" | tee -a "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "FAIL: test did not pass on Linux ${KERNEL_VERSION:-?}" | tee -a "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
