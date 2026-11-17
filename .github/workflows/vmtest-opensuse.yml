@@ -39,6 +39,7 @@ jobs:
         uses: libbpf/ci/setup-build-env@v3
         with:
           pahole: ${{ inputs.pahole }}
+          pahole-origin: 'https://kernel.googlesource.com/pub/scm/devel/pahole/pahole.git'
           arch: ${{ inputs.arch }}
           llvm-version: ${{ inputs.llvm-version }}
 
