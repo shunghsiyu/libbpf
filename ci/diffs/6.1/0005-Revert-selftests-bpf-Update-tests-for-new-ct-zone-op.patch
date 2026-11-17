@@ -1,0 +1,231 @@
+From 0c038f7580983f4272d597b1f87c72034688d09c Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 17 Nov 2026 04:53:17 +0000
+Subject: [PATCH stable 6.1] Revert "selftests/bpf: Update tests for new ct
+ zone opts for nf_conntrack kfuncs"
+
+This reverts the stable backport of upstream commit a87f34e742d2
+("selftests/bpf: Update tests for new ct zone opts for nf_conntrack
+kfuncs").
+
+The commit was pulled into this stable branch solely as a Stable-dep-of
+commit 5e8c349bc8d7 ("selftests/bpf: Fix flaky bpf_nf test when random
+NAT port is 0"). However, it tests the ct_zone_id and ct_zone_dir fields
+of struct bpf_ct_opts, which were introduced in v6.10 with commit
+ece4b2969041 ("net: netfilter: Make ct zone opts configurable for bpf ct
+helpers"), and that kernel-side change is not (and, being a new feature,
+should not be) present here. As a result test_bpf_nf.bpf.o can no longer
+be loaded, and bpf_nf/xdp-ct along with bpf_nf/tc-bpf-ct fail:
+
+  ; opts_def.ct_zone_id = 10;
+  386: <invalid CO-RE relocation>
+  failed to resolve CO-RE relocation <byte_off> [138] struct bpf_ct_opts___new.ct_zone_id (0:4 @ offset 10)
+  ...
+  libbpf: prog 'nf_xdp_ct_test': failed to load: -22
+  libbpf: failed to load object 'test_bpf_nf'
+  libbpf: failed to load BPF skeleton 'test_bpf_nf': -22
+  test_bpf_nf_ct:FAIL:test_bpf_nf__open_and_load unexpected error: -22
+
+Drop the new ct zone opts tests, while preserving the part of the
+flaky-test fix that applies to the pre-existing nf_ct_test().
+---
+ tools/testing/selftests/bpf/config            |   1 -
+ .../testing/selftests/bpf/prog_tests/bpf_nf.c |   7 --
+ .../testing/selftests/bpf/progs/test_bpf_nf.c | 108 ------------------
+ 3 files changed, 116 deletions(-)
+
+diff --git a/tools/testing/selftests/bpf/config b/tools/testing/selftests/bpf/config
+index 93cd02c41..59cec4244 100644
+--- a/tools/testing/selftests/bpf/config
++++ b/tools/testing/selftests/bpf/config
+@@ -62,7 +62,6 @@ CONFIG_NETFILTER_XT_MATCH_STATE=y
+ CONFIG_NETFILTER_XT_TARGET_CT=y
+ CONFIG_NF_CONNTRACK=y
+ CONFIG_NF_CONNTRACK_MARK=y
+-CONFIG_NF_CONNTRACK_ZONES=y
+ CONFIG_NF_DEFRAG_IPV4=y
+ CONFIG_NF_DEFRAG_IPV6=y
+ CONFIG_NF_NAT=y
+diff --git a/tools/testing/selftests/bpf/prog_tests/bpf_nf.c b/tools/testing/selftests/bpf/prog_tests/bpf_nf.c
+index fad98f01e..f80660c00 100644
+--- a/tools/testing/selftests/bpf/prog_tests/bpf_nf.c
++++ b/tools/testing/selftests/bpf/prog_tests/bpf_nf.c
+@@ -110,7 +110,6 @@ static void test_bpf_nf_ct(int mode)
+ 
+ 	ASSERT_EQ(skel->bss->test_einval_bpf_tuple, -EINVAL, "Test EINVAL for NULL bpf_tuple");
+ 	ASSERT_EQ(skel->bss->test_einval_reserved, -EINVAL, "Test EINVAL for reserved not set to 0");
+-	ASSERT_EQ(skel->bss->test_einval_reserved_new, -EINVAL, "Test EINVAL for reserved in new struct not set to 0");
+ 	ASSERT_EQ(skel->bss->test_einval_netns_id, -EINVAL, "Test EINVAL for netns_id < -1");
+ 	ASSERT_EQ(skel->bss->test_einval_len_opts, -EINVAL, "Test EINVAL for len__opts != NF_BPF_CT_OPTS_SZ");
+ 	ASSERT_EQ(skel->bss->test_eproto_l4proto, -EPROTO, "Test EPROTO for l4proto != TCP or UDP");
+@@ -129,12 +128,6 @@ static void test_bpf_nf_ct(int mode)
+ 	ASSERT_EQ(skel->bss->test_exist_lookup_mark, 43, "Test existing connection lookup ctmark");
+ 	ASSERT_EQ(skel->data->test_snat_addr, 0, "Test for source natting");
+ 	ASSERT_EQ(skel->data->test_dnat_addr, 0, "Test for destination natting");
+-	ASSERT_EQ(skel->data->test_ct_zone_id_alloc_entry, 0, "Test for alloc new entry in specified ct zone");
+-	ASSERT_EQ(skel->data->test_ct_zone_id_insert_entry, 0, "Test for insert new entry in specified ct zone");
+-	ASSERT_EQ(skel->data->test_ct_zone_id_succ_lookup, 0, "Test for successful lookup in specified ct_zone");
+-	ASSERT_EQ(skel->bss->test_ct_zone_dir_enoent_lookup, -ENOENT, "Test ENOENT for lookup with wrong ct zone dir");
+-	ASSERT_EQ(skel->bss->test_ct_zone_id_enoent_lookup, -ENOENT, "Test ENOENT for lookup in wrong ct zone");
+-
+ end:
+ 	if (client_fd != -1)
+ 		close(client_fd);
+diff --git a/tools/testing/selftests/bpf/progs/test_bpf_nf.c b/tools/testing/selftests/bpf/progs/test_bpf_nf.c
+index 2dc3ee964..917234b35 100644
+--- a/tools/testing/selftests/bpf/progs/test_bpf_nf.c
++++ b/tools/testing/selftests/bpf/progs/test_bpf_nf.c
+@@ -9,14 +9,10 @@
+ #define EINVAL 22
+ #define ENOENT 2
+ 
+-#define NF_CT_ZONE_DIR_ORIG (1 << IP_CT_DIR_ORIGINAL)
+-#define NF_CT_ZONE_DIR_REPL (1 << IP_CT_DIR_REPLY)
+-
+ extern unsigned long CONFIG_HZ __kconfig;
+ 
+ int test_einval_bpf_tuple = 0;
+ int test_einval_reserved = 0;
+-int test_einval_reserved_new = 0;
+ int test_einval_netns_id = 0;
+ int test_einval_len_opts = 0;
+ int test_eproto_l4proto = 0;
+@@ -26,11 +22,6 @@ int test_eafnosupport = 0;
+ int test_alloc_entry = -EINVAL;
+ int test_insert_entry = -EAFNOSUPPORT;
+ int test_succ_lookup = -ENOENT;
+-int test_ct_zone_id_alloc_entry = -EINVAL;
+-int test_ct_zone_id_insert_entry = -EAFNOSUPPORT;
+-int test_ct_zone_id_succ_lookup = -ENOENT;
+-int test_ct_zone_dir_enoent_lookup = 0;
+-int test_ct_zone_id_enoent_lookup = 0;
+ u32 test_delta_timeout = 0;
+ u32 test_status = 0;
+ u32 test_insert_lookup_mark = 0;
+@@ -54,17 +45,6 @@ struct bpf_ct_opts___local {
+ 	s32 netns_id;
+ 	s32 error;
+ 	u8 l4proto;
+-	u8 dir;
+-	u8 reserved[2];
+-};
+-
+-struct bpf_ct_opts___new {
+-	s32 netns_id;
+-	s32 error;
+-	u8 l4proto;
+-	u8 dir;
+-	u16 ct_zone_id;
+-	u8 ct_zone_dir;
+ 	u8 reserved[3];
+ } __attribute__((preserve_access_index));
+ 
+@@ -241,97 +221,10 @@ nf_ct_test(struct nf_conn *(*lookup_fn)(void *, struct bpf_sock_tuple *, u32,
+ 	}
+ }
+ 
+-static __always_inline void
+-nf_ct_opts_new_test(struct nf_conn *(*lookup_fn)(void *, struct bpf_sock_tuple *, u32,
+-						 struct bpf_ct_opts___new *, u32),
+-		    struct nf_conn *(*alloc_fn)(void *, struct bpf_sock_tuple *, u32,
+-						struct bpf_ct_opts___new *, u32),
+-		    void *ctx)
+-{
+-	struct bpf_ct_opts___new opts_def = { .l4proto = IPPROTO_TCP, .netns_id = -1 };
+-	struct bpf_sock_tuple bpf_tuple;
+-	struct nf_conn *ct;
+-
+-	__builtin_memset(&bpf_tuple, 0, sizeof(bpf_tuple.ipv4));
+-
+-	opts_def.reserved[0] = 1;
+-	ct = lookup_fn(ctx, &bpf_tuple, sizeof(bpf_tuple.ipv4), &opts_def,
+-		       sizeof(opts_def));
+-	opts_def.reserved[0] = 0;
+-	if (ct)
+-		bpf_ct_release(ct);
+-	else
+-		test_einval_reserved_new = opts_def.error;
+-
+-	bpf_tuple.ipv4.saddr = bpf_get_prandom_u32(); /* src IP */
+-	bpf_tuple.ipv4.daddr = bpf_get_prandom_u32(); /* dst IP */
+-	bpf_tuple.ipv4.sport = bpf_get_prandom_u32(); /* src port */
+-	bpf_tuple.ipv4.dport = bpf_get_prandom_u32(); /* dst port */
+-
+-	/* use non-default ct zone */
+-	opts_def.ct_zone_id = 10;
+-	opts_def.ct_zone_dir = NF_CT_ZONE_DIR_ORIG;
+-	ct = alloc_fn(ctx, &bpf_tuple, sizeof(bpf_tuple.ipv4), &opts_def,
+-		      sizeof(opts_def));
+-	if (ct) {
+-		__u16 sport = bpf_get_prandom_u32() % 65535 + 1;
+-		__u16 dport = bpf_get_prandom_u32() % 65535 + 1;
+-		union nf_inet_addr saddr = {};
+-		union nf_inet_addr daddr = {};
+-		struct nf_conn *ct_ins;
+-
+-		bpf_ct_set_timeout(ct, 10000);
+-
+-		/* snat */
+-		saddr.ip = bpf_get_prandom_u32();
+-		bpf_ct_set_nat_info(ct, &saddr, sport, NF_NAT_MANIP_SRC___local);
+-		/* dnat */
+-		daddr.ip = bpf_get_prandom_u32();
+-		bpf_ct_set_nat_info(ct, &daddr, dport, NF_NAT_MANIP_DST___local);
+-
+-		ct_ins = bpf_ct_insert_entry(ct);
+-		if (ct_ins) {
+-			struct nf_conn *ct_lk;
+-
+-			/* entry should exist in same ct zone we inserted it */
+-			ct_lk = lookup_fn(ctx, &bpf_tuple, sizeof(bpf_tuple.ipv4),
+-					  &opts_def, sizeof(opts_def));
+-			if (ct_lk) {
+-				bpf_ct_release(ct_lk);
+-				test_ct_zone_id_succ_lookup = 0;
+-			}
+-
+-			/* entry should not exist with wrong direction */
+-			opts_def.ct_zone_dir = NF_CT_ZONE_DIR_REPL;
+-			ct_lk = lookup_fn(ctx, &bpf_tuple, sizeof(bpf_tuple.ipv4),
+-					  &opts_def, sizeof(opts_def));
+-			opts_def.ct_zone_dir = NF_CT_ZONE_DIR_ORIG;
+-			if (ct_lk)
+-				bpf_ct_release(ct_lk);
+-			else
+-				test_ct_zone_dir_enoent_lookup = opts_def.error;
+-
+-			/* entry should not exist in default ct zone */
+-			opts_def.ct_zone_id = 0;
+-			ct_lk = lookup_fn(ctx, &bpf_tuple, sizeof(bpf_tuple.ipv4),
+-					  &opts_def, sizeof(opts_def));
+-			if (ct_lk)
+-				bpf_ct_release(ct_lk);
+-			else
+-				test_ct_zone_id_enoent_lookup = opts_def.error;
+-
+-			bpf_ct_release(ct_ins);
+-			test_ct_zone_id_insert_entry = 0;
+-		}
+-		test_ct_zone_id_alloc_entry = 0;
+-	}
+-}
+-
+ SEC("xdp")
+ int nf_xdp_ct_test(struct xdp_md *ctx)
+ {
+ 	nf_ct_test((void *)bpf_xdp_ct_lookup, (void *)bpf_xdp_ct_alloc, ctx);
+-	nf_ct_opts_new_test((void *)bpf_xdp_ct_lookup, (void *)bpf_xdp_ct_alloc, ctx);
+ 	return 0;
+ }
+ 
+@@ -339,7 +232,6 @@ SEC("tc")
+ int nf_skb_ct_test(struct __sk_buff *ctx)
+ {
+ 	nf_ct_test((void *)bpf_skb_ct_lookup, (void *)bpf_skb_ct_alloc, ctx);
+-	nf_ct_opts_new_test((void *)bpf_skb_ct_lookup, (void *)bpf_skb_ct_alloc, ctx);
+ 	return 0;
+ }
+ 
+-- 
+2.43.0
+
