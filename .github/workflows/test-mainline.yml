@@ -7,7 +7,7 @@ on:
     - cron:  '0 17 * * *'
 
 concurrency:
-  group: mainline-ci-test-${{ github.head_ref }}
+  group: mainline-ci-test-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
