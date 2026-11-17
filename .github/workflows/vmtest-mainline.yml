@@ -39,13 +39,14 @@ jobs:
         uses: libbpf/ci/setup-build-env@v3
         with:
           pahole: ${{ inputs.pahole }}
+          pahole-origin: 'https://kernel.googlesource.com/pub/scm/devel/pahole/pahole.git'
           arch: ${{ inputs.arch }}
           llvm-version: ${{ inputs.llvm-version }}
 
       - name: Get kernel source at checkpoint
         uses: shunghsiyu/libbpf-ci/get-linux-source@v3
         with:
-          repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git'
+          repo: 'https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git'
           rev: 'master'
           dest: '${{ github.workspace }}/.kernel'
 
